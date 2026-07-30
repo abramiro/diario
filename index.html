@@ -184,6 +184,33 @@ section.on{display:block;animation:fi .15s ease}
 .hrow .v{font-variant-numeric:tabular-nums;font-weight:600;white-space:nowrap}
 .hrow.ing .v{color:var(--ok)}
 
+
+/* ---- semáforo de conciliación ---- */
+.sem{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:700;
+  text-transform:uppercase;letter-spacing:.06em;padding:3px 9px;border-radius:999px}
+.sem i{width:7px;height:7px;border-radius:50%;flex:0 0 auto}
+.sem.ok{background:rgba(55,211,153,.13);color:var(--ok)}   .sem.ok i{background:var(--ok)}
+.sem.warn{background:rgba(245,181,68,.13);color:var(--warn)} .sem.warn i{background:var(--warn)}
+.sem.bad{background:rgba(242,99,95,.13);color:var(--bad)}  .sem.bad i{background:var(--bad)}
+.sem.gris{background:var(--bg3);color:var(--tx3)}          .sem.gris i{background:var(--tx3)}
+
+.concil{display:flex;gap:8px;margin-bottom:12px}
+.concil div{flex:1;background:var(--bg2);border:1px solid var(--line);border-radius:12px;
+  padding:11px 12px;text-align:center}
+.concil span{display:block;font-size:10px;color:var(--tx3);text-transform:uppercase;
+  letter-spacing:.07em;font-weight:650;margin-bottom:5px}
+.concil b{font-size:15px;font-weight:660;font-variant-numeric:tabular-nums}
+.concil div.dif.no b{color:var(--bad)}
+.concil div.dif.si b{color:var(--ok)}
+
+.opts{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}
+.opts button{background:var(--bg2);border:1px solid var(--line);border-radius:11px;
+  padding:11px 14px;font-size:13.5px;color:var(--tx2);font-weight:550}
+.opts button.on{background:var(--acc);border-color:var(--acc);color:#fff}
+.plan{background:var(--bg3);border-radius:12px;padding:13px;font-size:13px;
+  color:var(--tx2);line-height:1.5;margin:4px 0 14px}
+.plan b{color:var(--tx);font-weight:650}
+
 /* ---- balance consolidado ---- */
 .bal{padding:2px 0 4px}
 .bal-t{display:flex;align-items:baseline;margin-bottom:7px}
@@ -767,8 +794,12 @@ input[type=text],input[type=number],input[type=date],select{
       </div>
     </div>
     <div class="card"><h3>Detalle</h3><div id="slResumen"></div></div>
-    <div class="card" id="slAviso" style="display:none">
-      <div class="warnbox" id="slAvisoT"></div>
+    <div class="card">
+      <div class="f" style="margin-bottom:10px">
+        <h3 style="flex:1;margin:0">Conciliación</h3>
+        <span id="slSem" class="sem gris"><i></i>—</span>
+      </div>
+      <div id="slConcil"></div>
     </div>
     <div class="card"><div id="slList"></div></div>
     <div class="card">
@@ -866,6 +897,15 @@ input[type=text],input[type=number],input[type=date],select{
     <p class="note" style="margin-bottom:12px">Sábados, domingos y festivos de Colombia,
       el Inicio suma lo que quede en estos rubros al disponible del día. Weekend sale
       del presupuesto del mes; Recreación, del saldo de su sobre.</p>
+    <div class="f" style="margin-bottom:6px">
+      <label>Qué pasa al registrar</label>
+      <select id="cfModo">
+        <option value="tarea">Completar una tarea</option>
+        <option value="moneda">Dar monedas</option>
+        <option value="exp">Dar experiencia</option>
+      </select>
+    </div>
+    <p class="note" style="margin-bottom:12px" id="cfModoN"></p>
     <div class="f" style="margin-bottom:10px">
       <label>Monedas por registro</label>
       <input type="number" id="cfCoin" min="0" max="99" step="1">
@@ -883,16 +923,25 @@ input[type=text],input[type=number],input[type=date],select{
       <input type="text" id="cfSkills" placeholder="2,6">
     </div>
     <div class="f" style="margin-bottom:10px">
-      <label>Tarea diaria</label>
-      <input type="text" id="cfTarea" placeholder="Diario al día">
+      <label>Nombre de la tarea</label>
+      <input type="text" id="cfTarea" placeholder="Registrar movimiento">
     </div>
     <div class="f" style="margin-bottom:12px">
-      <label>URL pública de esta app</label>
-      <input type="text" id="cfUrl" placeholder="https://usuario.github.io/diario/">
+      <label>URL de esta app</label>
+      <input type="text" id="cfUrl" placeholder="se detecta sola">
     </div>
     <button class="primary gray" id="btnTestLife" style="margin-bottom:8px">Probar conexión</button>
-    <button class="primary gray" id="btnTienda">Sincronizar tienda con el presupuesto</button>
-    <p class="note" style="margin-top:10px">La tienda crea un ítem por cada rubro discrecional, con precio en monedas = presupuesto ÷ tasa, y un efecto de enlace que vuelve a esta app con el gasto precargado. Así una compra en el juego registra el gasto real.</p>
+    <button class="primary gray" id="btnTienda" style="margin-bottom:8px">Enviar la tienda a LifeUp</button>
+    <button class="primary gray" id="btnDeposito">Depositar la cuota de sobres en el cajero</button>
+    <p class="note" style="margin:-6px 0 12px">Es la dirección desde la que abriste la app,
+      y se llena sola. Sirve para que un ítem de la tienda pueda volver acá con el gasto
+      precargado.</p>
+    <p class="note" style="margin-top:10px">La tienda crea un ítem por cada rubro
+      discrecional, con precio en monedas = presupuesto ÷ tasa, y un efecto de enlace que
+      vuelve a esta app con el gasto precargado. Así una compra en el juego registra el
+      gasto real.<br><br><b>Va de a un ítem por toque</b>: Android solo permite abrir
+      LifeUp cuando la orden sale de un gesto tuyo, así que mandar varios de corrido
+      hace que se pierdan en silencio.</p>
   </div>
 
   <div class="card">
@@ -928,6 +977,7 @@ input[type=text],input[type=number],input[type=date],select{
     <div id="odEstado"></div>
     <button class="primary" id="btnOdCon" style="margin:10px 0 8px">Conectar OneDrive</button>
     <button class="primary gray" id="btnOdSync" style="margin-bottom:8px">Sincronizar ahora</button>
+    <button class="primary gray" id="btnOdBase" style="margin-bottom:8px">Subir la base a OneDrive</button>
     <button class="primary gray" id="btnOdOut" style="margin-bottom:10px">Desconectar</button>
     <details>
       <summary class="note" style="cursor:pointer">Configuración inicial (una sola vez)</summary>
@@ -1165,9 +1215,43 @@ input[type=text],input[type=number],input[type=date],select{
   </div>
 </div>
 
+<div id="tie" style="position:fixed;inset:0;z-index:77;background:var(--bg);display:none;
+     flex-direction:column;padding:calc(12px + env(safe-area-inset-top)) var(--pad)
+     calc(14px + env(safe-area-inset-bottom))">
+  <div class="wz-top">
+    <button class="chipbtn" id="tieSalir">Salir</button>
+    <div style="flex:1;text-align:center;font-weight:600;font-size:14px">Enviar a la tienda</div>
+    <div class="p" id="tiePaso">—</div>
+  </div>
+  <div class="wz-track"><i id="tieProg" style="width:0%"></i></div>
+  <div id="tieCuerpo" style="flex:1;overflow:auto"></div>
+  <div id="tiePie" style="padding-top:14px"></div>
+</div>
+
+<div id="bsa" style="position:fixed;inset:0;z-index:79;background:var(--bg);display:none;
+     flex-direction:column;padding:calc(12px + env(safe-area-inset-top)) var(--pad)
+     calc(14px + env(safe-area-inset-bottom));overflow:auto">
+  <div class="f" style="margin-bottom:18px">
+    <button class="chipbtn" id="bsaCerrar">Cerrar</button>
+    <div style="flex:1;text-align:center;font-weight:600;font-size:14px" id="bsaTit">—</div>
+    <span style="width:60px"></span>
+  </div>
+  <div style="flex:1" id="bsaCuerpo"></div>
+</div>
+
+<div id="nuevaV" style="display:none;position:fixed;left:12px;right:12px;
+     bottom:calc(84px + env(safe-area-inset-bottom));z-index:85;background:var(--acc);
+     color:#fff;border-radius:14px;padding:13px 15px;font-size:13.5px;
+     display:none;align-items:center;gap:12px">
+  <span style="flex:1">Hay una versión nueva de la app.</span>
+  <button id="nuevaVOk" style="background:#fff;color:var(--acc);border-radius:9px;
+    padding:7px 13px;font-weight:650;font-size:12.5px">Actualizar</button>
+</div>
+
 <div id="toast"></div>
 <script>
 'use strict';
+const VERSION = '2026.07.29-5';   /* subí esto en cada cambio publicado */
 /* ===================================================================
    Diario · Presupuesto — PWA local-first
    Los datos viven en IndexedDB en este dispositivo. Nada sale de acá
@@ -1196,7 +1280,8 @@ const hayDatos = () => !!S;
 const MESNOM = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
 
 const CFG_DEF = {
-  lifeup:false, coin:1, tasa:5000, exp:10, skills:'', tarea:'Diario al día',
+  lifeup:false, lifeModo:'tarea', coin:1, tasa:5000, exp:10, skills:'',
+  tarea:'Registrar movimiento',
   url:'', neto:0, baseHasta:'2026-07', nombre:'', ocio:'Weekend,Recreación',
   trmEUR:0, trmUSD:0, hurdle:0.168, odClient:''
 };
@@ -1324,65 +1409,120 @@ function estado(r, y){
            porDia: rest>0 ? Math.max(0,p-e)/rest : 0 };
 }
 
-/* =================== LifeUp =================== */
-const LQ = [];
-let lqRun = false;
-function lifeQueue(url){ LQ.push(url); if(!lqRun) lqDrain(); }
-function lqDrain(){
-  lqRun = true;
-  const u = LQ.shift();
-  if (!u){ lqRun=false; return; }
-  const a = document.createElement('a');
-  a.href = u; a.style.display='none';
-  document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(lqDrain, 700);
-}
+/* =================================================================
+   LIFEUP
+   Chrome en Android solo abre esquemas externos si la navegación sale
+   de un toque del usuario. Encolar llamadas con setTimeout las deja
+   fuera del gesto y se bloquean sin aviso. Así que la regla es una
+   sola: UNA llamada por toque, siempre síncrona.
+   Para dar monedas y experiencia a la vez se completa una tarea de
+   LifeUp: las recompensas se configuran allá, donde corresponde, y
+   viajan en una única llamada.
+   ================================================================= */
 function life(method, params){
-  if (!CFG.lifeup) return;
+  if (!CFG.lifeup) return false;
   const q = Object.entries(params).filter(([,v])=>v!==''&&v!=null)
     .map(([k,v])=>encodeURIComponent(k)+'='+encodeURIComponent(v)).join('&');
-  lifeQueue('lifeup://api/'+method+(q?'?'+q:''));
+  const url = 'lifeup://api/'+method+(q?'?'+q:'');
+  const a = document.createElement('a');
+  a.href = url; a.style.display='none';
+  document.body.appendChild(a); a.click(); a.remove();
+  return true;
 }
+/* varios atributos en una sola llamada: skills se repite */
+function lifeExp(why, num, skills){
+  const q = skills.map(i=>'skills='+encodeURIComponent(i)).join('&');
+  const a = document.createElement('a');
+  a.href = 'lifeup://api/reward?type=exp&content='+encodeURIComponent(why)
+         + '&number='+num+'&'+q+'&silent=true';
+  a.style.display='none'; document.body.appendChild(a); a.click(); a.remove();
+}
+
 function lifeReward(m){
+  if (!CFG.lifeup) return;
   const why = 'Registro: '+m.r+' '+money(m.valor);
-  if (CFG.coin>0) life('reward',{type:'coin',content:why,number:CFG.coin,silent:true});
-  if (CFG.exp>0 && CFG.skills.trim()){
-    const ids = CFG.skills.split(',').map(s=>s.trim()).filter(Boolean);
-    const q = ids.map(i=>'skills='+encodeURIComponent(i)).join('&');
-    lifeQueue('lifeup://api/reward?type=exp&content='+encodeURIComponent(why)
-      +'&number='+CFG.exp+'&'+q+'&silent=true');
+  if (CFG.lifeModo === 'tarea'){
+    /* LifeUp aplica lo que tengas configurado en la tarea: monedas,
+       experiencia, ítems y la racha, todo de una */
+    life('complete', {task_name: CFG.tarea || 'Registrar movimiento'});
+  } else if (CFG.lifeModo === 'exp' && CFG.skills.trim()){
+    lifeExp(why, CFG.exp||10, CFG.skills.split(',').map(x=>x.trim()).filter(Boolean));
+  } else if (CFG.coin > 0){
+    life('reward', {type:'coin', content:why, number:CFG.coin, silent:true});
   }
 }
-/* un sobre real = un depósito en el cajero de LifeUp */
-function lifeSobre(pesos, dir){
-  if (!CFG.lifeup || !pesos) return;
-  const c = Math.max(1, Math.round(Math.abs(pesos)/CFG.tasa));
-  life(dir>0?'deposit':'withdraw', {amount:c});
-}
-/* tienda: un ítem por rubro discrecional, precio en monedas, con enlace de vuelta */
-function tiendaSync(){
-  if (!CFG.lifeup){ toast('Activá LifeUp primero', true); return; }
-  const base = (CFG.url||'').replace(/\/+$/,'');
-  const rs = S.rubros.filter(r=>(r.nat==='Evento'||r.nat==='Hábito') && budget(r.n,ym)>0)
-    .sort((a,b)=>budget(b.n,ym)-budget(a.n,ym)).slice(0,14);
-  let n=0;
-  for (const r of rs){
+
+/* =========== envío guiado de la tienda ===========
+   No se puede mandar veintidós ítems de corrido: cada uno necesita su
+   propio toque. Así que se va de a uno, con un botón que avanza. */
+let TIENDA = {lista:[], i:0};
+
+function tiendaArmar(){
+  const base = ((CFG.url || redirectUri())||'').replace(/\/+$/,'');
+  const rs = S.rubros
+    .filter(r=>(r.nat==='Evento'||r.nat==='Hábito') && budget(r.n,ym)>0)
+    .sort((a,b)=>budget(b.n,ym)-budget(a.n,ym)).slice(0,10);
+  const out = rs.map(r=>{
     const pesos = budget(r.n, ym);
-    const precio = Math.max(1, Math.round(pesos/CFG.tasa));
-    const p = { name: r.n+' · '+money(pesos), price: precio, stock_number:-1,
+    const p = { name: r.n+' · '+money(pesos),
+      price: Math.max(1, Math.round(pesos/CFG.tasa)), stock_number:-1,
       desc: 'Rubro '+r.nat+'. '+money(pesos)+' del presupuesto de '+ymLabel(ym)
-            +'. Tasa '+money(CFG.tasa)+' por moneda.',
-      action_text:'Gastar' };
+            +'. Tasa '+money(CFG.tasa)+' por moneda.', action_text:'Gastar' };
     if (base) p.effects = JSON.stringify([{type:9,
       info:{url: base+'/?r='+encodeURIComponent(r.n)+'&v='+pesos, use_web_view:false}}]);
-    life('add_item', p); n++;
+    return {et:r.n, precio:p.price, params:p};
+  });
+  for (const pr of (S.premios||[])) out.push({et:'Premio · '+pr.n, precio:pr.p*200,
+    params:{name:'Premio · '+pr.n, price:pr.p*200, stock_number:1,
+      desc:'De tu lista de Premios, prioridad '+pr.p+'.', action_text:'Reclamar'}});
+  return out;
+}
+
+function tiendaAbrir(){
+  if (!CFG.lifeup){ toast('Activá LifeUp primero', true); return; }
+  TIENDA = {lista:tiendaArmar(), i:0};
+  if (!TIENDA.lista.length){ toast('No hay rubros con presupuesto para enviar', true); return; }
+  tiendaPintar();
+  $('#tie').style.display='flex';
+}
+function tiendaPintar(){
+  const n = TIENDA.lista.length;
+  if (TIENDA.i >= n){
+    $('#tieCuerpo').innerHTML = `<div class="wz-rubro">Listo</div>
+      <div class="wz-nat">${n} ítems enviados a LifeUp</div>
+      <p class="note" style="margin-top:16px">Abrí la tienda de LifeUp y confirmá que
+        están. Si alguno falta, volvé a correr el envío: crear el mismo ítem dos veces
+        no rompe nada, solo lo duplica, y podés borrar el sobrante allá.</p>`;
+    $('#tiePie').innerHTML = '<button class="primary" id="tieFin">Cerrar</button>';
+    $('#tieFin').onclick = () => { $('#tie').style.display='none'; };
+    $('#tieProg').style.width='100%';
+    $('#tiePaso').textContent='listo';
+    return;
   }
-  for (const pr of S.premios){
-    life('add_item',{ name:'Premio · '+pr.n, price: pr.p*200, stock_number:1,
-      desc:'De tu lista de Premios, prioridad '+pr.p+'.', action_text:'Reclamar' });
-    n++;
-  }
-  toast('Enviando '+n+' ítems a LifeUp…');
+  const it = TIENDA.lista[TIENDA.i];
+  $('#tieProg').style.width = (TIENDA.i/n*100)+'%';
+  $('#tiePaso').textContent = (TIENDA.i+1)+' de '+n;
+  $('#tieCuerpo').innerHTML = `
+    <div class="wz-rubro">${it.et}</div>
+    <div class="wz-nat">${it.precio} ${it.precio===1?'moneda':'monedas'}</div>
+    <p class="note" style="margin-top:18px">Cada ítem necesita su propio toque: Android
+      solo deja abrir LifeUp si la orden sale de un gesto tuyo. La primera vez te va a
+      preguntar si abrís la aplicación — aceptá y volvé acá.</p>`;
+  $('#tiePie').innerHTML =
+    `<button class="primary" id="tieOk" style="margin-bottom:9px">Enviar y siguiente</button>
+     <button class="primary gray" id="tieSalto">Saltar este</button>`;
+  $('#tieOk').onclick = () => { life('add_item', it.params); TIENDA.i++; tiendaPintar(); };
+  $('#tieSalto').onclick = () => { TIENDA.i++; tiendaPintar(); };
+}
+
+/* el cajero de LifeUp refleja los sobres: acción manual, un toque */
+function lifeSobreManual(){
+  if (!CFG.lifeup){ toast('Activá LifeUp primero', true); return; }
+  const cuota = rubrosDe('Evento').reduce((s,r)=>s+budget(r,ym),0);
+  if (!cuota){ toast('No hay cuota de sobres este mes', true); return; }
+  const c = Math.max(1, Math.round(cuota/CFG.tasa));
+  life('deposit', {amount:c});
+  toast('Depositando '+c+' monedas en el cajero de LifeUp');
 }
 
 /* =================== registrar =================== */
@@ -1401,8 +1541,7 @@ async function guardar(){
   const v = m.valor;
   MOV.push(m);
   await DB.put('mov', m);
-  lifeReward(m);
-  if (RB[r] && RB[r].nat==='Evento') lifeSobre(v, -1);
+  lifeReward(m);          /* una sola llamada, dentro del toque de Guardar */
   closePad();
   const e = estado(r, ym);
   let msg = (cur==='COP' ? money(v) : montoEn(cur,orig)+' = '+money(v))+' · '+r;
@@ -1835,13 +1974,26 @@ function renderCatSel(){
   if (prev) sel.value = prev;
 }
 
+
+const MODO_N = {
+  tarea:'Completa una tarea de LifeUp y deja que allá se decidan las recompensas: '
+       +'monedas, experiencia, ítems y la racha. Es una sola llamada y es la opción '
+       +'más flexible. Creá la tarea con el nombre de abajo, repetible.',
+  moneda:'Da monedas directo, sin depender de ninguna tarea. Simple y siempre funciona.',
+  exp:'Da experiencia a los atributos que indiques abajo. Necesita los identificadores.'
+};
+
 function renderCfg(){
   renderCatSel();
   $('#cfLifeup').classList.toggle('on', !!CFG.lifeup);
   $('#cfNombre').value=CFG.nombre||''; $('#cfOcio').value=CFG.ocio||'';
+  if (!CFG.url) setCfg('url', redirectUri());
+  $('#cfModo').value = CFG.lifeModo || 'tarea';
+  $('#cfModoN').textContent = MODO_N[CFG.lifeModo||'tarea'];
   $('#cfCoin').value=CFG.coin; $('#cfTasa').value=CFG.tasa;
   $('#cfExp').value=CFG.exp; $('#cfSkills').value=CFG.skills;
-  $('#cfTarea').value=CFG.tarea; $('#cfUrl').value=CFG.url;
+  $('#cfTarea').value=CFG.tarea;
+  $('#cfUrl').value = CFG.url || redirectUri();
   $('#cfTrmEUR').value=CFG.trmEUR; $('#cfTrmUSD').value=CFG.trmUSD;
   const fx = MOV.filter(m=>m.moneda && m.moneda!=='COP');
   const porCur = {};
@@ -1994,6 +2146,7 @@ async function renderDb(){
   const d = await diagnostico();
   const sembrado = SA.flujos.length + S.rubros.length;
   let h = `<table>
+    <tr><td>Versión de la app</td><td class="mono">${VERSION}</td></tr>
     <tr><td>Base inicial</td><td style="color:${hayDatos()?'var(--ok)':'var(--bad)'}">${
       hayDatos() ? nf.format(SH.n)+' movimientos · '+S.rubros.length+' rubros' : 'sin cargar'}</td></tr>
     <tr><td>Motor</td><td>IndexedDB</td></tr>
@@ -2405,6 +2558,13 @@ async function odSync(silencio){
   if (odEnCurso) return;
   odEnCurso = true;
   try {
+    /* Si tengo la base y en OneDrive no está, la subo. Así el orden en que
+       hagas las cosas deja de importar: importar antes o después de conectar
+       termina igual. */
+    if (hayDatos()){
+      try { if (!(await existeBase())) { await subirBase();
+        if (!silencio) toast('Base subida a OneDrive'); } } catch(e){}
+    }
     const remoto = await odLeer();
     if (remoto) await fusionar(remoto, true);
     await odEscribir(snapshot());
@@ -2450,8 +2610,14 @@ function renderOd(){
       <tr><td>Archivo</td><td class="mono" style="font-size:11px">Aplicaciones/Diario Presupuesto/${OD.file}</td></tr>
       <tr><td>Última sincronización</td><td class="mono">${
         min==null ? 'nunca' : min===0 ? 'hace menos de un minuto' : 'hace '+min+' min'}</td></tr>
-      <tr class="tot"><td>Estado</td><td class="mono" style="color:${err?'var(--bad)':'var(--ok)'}">
-        ${err ? ODT.err : 'al día'}</td></tr></table>`;
+      <tr><td>Estado</td><td class="mono" style="color:${err?'var(--bad)':'var(--ok)'}">
+        ${err ? ODT.err : 'al día'}</td></tr>
+      <tr class="tot"><td>Base en OneDrive</td><td class="mono" id="odBaseEst">comprobando…</td></tr></table>`;
+    existeBase().then(ok=>{
+      const el=$$real('#odBaseEst'); if(!el) return;
+      el.textContent = ok ? 'sí · base.json' : 'falta — tocá "Subir la base"';
+      el.style.color = ok ? 'var(--ok)' : 'var(--warn)';
+    }).catch(()=>{});
   }
 }
 
@@ -2754,16 +2920,10 @@ function renderSaldos(){
     <tr><td>Deudas</td><td class="mono" style="color:var(--bad)">−${money(deu)}</td></tr>
     <tr class="tot"><td>Patrimonio neto</td><td class="mono">${money(patrimonio)}</td></tr></table>`;
 
-  const desc = filas.filter(x=>x.dif != null && Math.abs(x.dif) > 1);
-  $('#slAviso').style.display = desc.length ? 'block' : 'none';
-  if (desc.length) $('#slAvisoT').innerHTML =
-    '<b>No cuadran:</b> '+desc.map(x=>x.b+' ('+money(x.dif)+')').join(', ')
-    +'. Revisá si falta registrar un movimiento o si el saldo verificado quedó viejo.';
-
-  $('#slCorte').textContent = SS.corte;
   const fila = (x, sub) => {
     const cur = x.moneda!=='COP';
-    const est = x.dif==null ? '' : Math.abs(x.dif)<1 ? 'ok' : 'mal';
+    const sm = semaforo(x.b);
+    const est = sm.st==='ok' ? 'ok' : (sm.st==='warn'||sm.st==='bad') ? 'mal' : '';
     const hs = sub ? [] : hijos(x.b);
     const abierta = renderSaldos.abierta===x.b;
     return `<div class="sl-r ${est}${sub?' sub':''}" data-b="${x.b}">
@@ -2771,9 +2931,9 @@ function renderSaldos(){
           ${x.nota?`<em>${x.nota}</em>`:''}
           ${hs.length?`<em>${hs.length} bolsillos · tocá para ${abierta?'cerrar':'ver'}</em>`:''}
           ${cur?`<em>${montoEn(x.moneda,x.s)} · TRM ${money(trmDe(x.moneda))}</em>`:''}
-          ${!hs.length && x.ver!=null?`<em>verificado ${x.verF||''}${
-            Math.abs(x.dif)<1?' · cuadra':' · difiere '+money(x.dif)}</em>`
-            :(!hs.length?'<em>sin verificar</em>':'')}</div>
+          ${!hs.length ? `<em>${sm.st==='gris' ? 'sin verificar'
+            : sm.st==='ok' ? 'cuadra · '+x.verF
+            : sm.et+' · '+money(sm.dif)}</em>` : ''}</div>
         <div class="sl-v mono">${money(x.cop)}</div>
       </div>`
       + (hs.length && abierta ? hs.map(h=>{
@@ -2789,8 +2949,9 @@ function renderSaldos(){
     return `<div class="sl-g">${g}<span class="mono">${money(tot(g))}</span></div>`
       + sub.map(x=>fila(x,false)).join('');
   }).join('');
+  const _c=$$real('#slCorte'); if(_c) _c.textContent = SS.corte;
+  renderConcil();
 }
-
 function renderBolsas(){
   armarBolsas();
   const padres = BOLSAS.filter(b=>!b.padre).sort((a,b)=>nomB(a.b).localeCompare(nomB(b.b),'es'));
@@ -2893,22 +3054,7 @@ async function nuevoBolsillo(){
   toast('Bolsillo "'+n+'" creado en '+nomB(p.b));
 }
 
-async function verificar(nb){
-  const s = saldoDe(nb);
-  const cur = BOLSA[nb] ? BOLSA[nb].moneda : 'COP';
-  const act = VER[nb] ? VER[nb].v : Math.round(s*100)/100;
-  const t = prompt(`Saldo real de ${nb}${cur!=='COP'?' (en '+cur+')':''}\n`
-    +`Calculado: ${montoEn(cur, s)}`, act);
-  if (t===null) return;
-  if (t.trim()===''){ delete VER[nb]; await DB.del('ver', nb); }
-  else {
-    VER[nb] = {v:+t||0, fecha:todayISO()};
-    await DB.put('ver', {b:nb, ...VER[nb]});
-  }
-  renderSaldos(); autoSave();
-  const d = VER[nb] ? s - VER[nb].v : 0;
-  if (VER[nb]) toast(Math.abs(d)<1 ? nb+' cuadra' : nb+' difiere '+money(d), Math.abs(d)>=1);
-}
+
 
 /* =================================================================
    TRASLADOS — mover plata entre bolsas en una sola operación.
@@ -3331,11 +3477,31 @@ async function guardarBase(d, subir){
   }
 }
 
+/* ¿está la base en OneDrive? Devuelve true si existe. */
+async function existeBase(){
+  const t = await odToken();
+  const r = await fetch(OD_BASE, {headers:{Authorization:'Bearer '+t}});
+  return r.ok;
+}
+
+async function subirBase(){
+  if (!odActivo()) throw new Error('conectá OneDrive primero');
+  const b = await DB.get('cfg','base');
+  if (!b || !b.v) throw new Error('todavía no importaste la base en este dispositivo');
+  const t = await odToken();
+  const r = await fetch(OD_BASE+':/content', {method:'PUT',
+    headers:{Authorization:'Bearer '+t, 'Content-Type':'application/json'},
+    body: JSON.stringify(b.v)});
+  if (!r.ok) throw new Error('no se pudo subir ('+r.status+')');
+  return true;
+}
+
 async function bajarBase(){
   if (!odActivo()) throw new Error('conectá OneDrive primero');
   const t = await odToken();
   const r = await fetch(OD_BASE+':/content', {headers:{Authorization:'Bearer '+t}});
-  if (r.status===404) throw new Error('todavía no hay base en tu OneDrive. Importala primero desde el computador.');
+  if (r.status===404) throw new Error('no hay base en tu OneDrive todavía. En el computador, '
+    + 'Ajustes → Sincronización → "Subir la base a OneDrive".');
   if (!r.ok) throw new Error('no se pudo leer ('+r.status+')');
   const d = await r.json();
   await guardarBase(d, false);
@@ -3602,6 +3768,228 @@ function renderHome(){
     `<button class="htile" data-ir="${v}">${svg(p)}<span class="e">${e}</span></button>`).join('');
 }
 
+/* =================================================================
+   CONCILIACIÓN
+   Un saldo verificado que no coincide con el calculado significa que
+   falta registrar algo. El semáforo lo señala y el ajuste lo cierra:
+   crea el movimiento que falta, atribuido al rubro que elijas, para
+   que el calculado quede igual al verificado. No maquilla el número:
+   deja el rastro de por qué se movió.
+   ================================================================= */
+
+/* Tolerancia: hasta mil pesos o medio por ciento del saldo, lo que sea
+   mayor. Debajo de eso es redondeo y no vale la pena perseguirlo. */
+function tolerancia(saldo){
+  return Math.max(1000, Math.abs(saldo)*0.005);
+}
+function semaforo(nb){
+  if (hijos(nb).length) return {st:'gris', et:'suma de bolsillos', dif:null};
+  const v = VER[nb];
+  if (!v) return {st:'gris', et:'sin verificar', dif:null};
+  const s = saldoPropio(nb), dif = s - v.v, tol = tolerancia(v.v);
+  if (Math.abs(dif) < 1)   return {st:'ok',   et:'cuadra',    dif:0, ver:v};
+  if (Math.abs(dif) <= tol) return {st:'warn', et:'diferencia menor', dif, ver:v};
+  return {st:'bad', et:'no cuadra', dif, ver:v};
+}
+
+/* rubros para cargar la diferencia, según de qué lado esté */
+const AJ_GASTO   = ['Costos Bancarios','Intereses','Impuestos Vehículo','Otros'];
+const AJ_INGRESO = ['Intereses a favor','Ingreso','Otros'];
+
+let BSA = {b:null, rubro:null, contra:null, modo:'rubro'};
+
+function abrirBolsa(nb){
+  BSA = {b:nb, rubro:null, contra:(nb==='Caja' ? 'Ahorro$' : null), modo:'rubro'};
+  $('#bsaTit').textContent = nomB(nb);
+  bsaPintar();
+  $('#bsa').style.display='flex';
+}
+function cerrarBolsa(){ $('#bsa').style.display='none'; renderSaldos(); }
+
+function bsaPintar(){
+  const nb = BSA.b, info = BOLSA[nb]||{};
+  const cur = info.moneda || 'COP';
+  const s = saldoPropio(nb);
+  const sem = semaforo(nb);
+  const dif = sem.dif;
+  const falta = dif!=null && Math.abs(dif) >= 1;
+
+  /* El signo de la diferencia decide qué rubros valen. Si el elegido quedó
+     del lado contrario —porque la diferencia cambió de signo al reverificar—
+     hay que soltarlo, o se ofrecería registrar un ingreso como gasto. */
+  const opciones = (dif>0 ? AJ_GASTO : AJ_INGRESO).filter(r=>RB[r]);
+  if (!opciones.includes(BSA.rubro)) BSA.rubro = opciones[0] || null;
+
+  let h = `<div class="concil">
+      <div><span>Calculado</span><b class="mono">${montoEn(cur,s)}</b></div>
+      <div><span>Verificado</span><b class="mono">${
+        sem.ver ? montoEn(cur, sem.ver.v) : '—'}</b></div>
+      <div class="dif ${falta?'no':'si'}"><span>Diferencia</span><b class="mono">${
+        dif==null ? '—' : montoEn(cur, dif)}</b></div>
+    </div>
+    <div style="margin-bottom:16px"><span class="sem ${sem.st}"><i></i>${sem.et}</span>
+      ${sem.ver?`<span class="note" style="margin-left:8px">verificado el ${sem.ver.fecha}</span>`:''}</div>
+
+    <div class="lbl" style="margin-bottom:5px">Saldo real ${cur!=='COP'?'(en '+cur+')':''}</div>
+    <div class="f" style="margin-bottom:6px">
+      <input type="number" id="bsaVer" step="0.01" style="max-width:100%;width:100%;
+        text-align:right;font-size:18px" value="${sem.ver ? sem.ver.v : Math.round(s*100)/100}">
+    </div>
+    <button class="primary gray" id="bsaGuardarVer" style="margin-bottom:6px">Guardar el saldo real</button>
+    <button class="primary gray" id="bsaBorrarVer" style="margin-bottom:18px;font-size:13px;
+      padding:10px">Quitar la verificación</button>`;
+
+  if (falta){
+    const gasto = dif>0;
+    h += `<div class="hr"></div>
+      <h3 style="margin:16px 0 4px">Ajuste rápido</h3>
+      <p class="note" style="margin-bottom:12px">${gasto
+        ? 'El sistema cree que tenés <b>'+montoEn(cur,dif)+' más</b> de lo que hay. Falta registrar una salida.'
+        : 'El sistema cree que tenés <b>'+montoEn(cur,-dif)+' menos</b> de lo que hay. Falta registrar una entrada.'}</p>
+
+      <div class="opts" id="bsaModo">
+        <button data-m="rubro" class="${BSA.modo==='rubro'?'on':''}">Cargarlo a un rubro</button>
+        <button data-m="bolsa" class="${BSA.modo==='bolsa'?'on':''}">⇄ Contra otra bolsa</button>
+      </div>`;
+
+    if (BSA.modo==='rubro'){
+      h += `<div class="opts" id="bsaRubros">`
+        + opciones.map(r=>`<button data-r="${r}" class="${BSA.rubro===r?'on':''}">${r}</button>`).join('')
+        + `</div>
+        <div class="plan">Voy a registrar ${gasto?'un gasto':'un ingreso'} de
+          <b>${montoEn(cur, Math.abs(dif))}</b> en <b>${BSA.rubro||'—'}</b>, bolsa
+          <b>${nomB(nb)}</b>, con fecha de hoy y la observación
+          «ajuste de conciliación». El saldo calculado va a quedar en
+          <b>${montoEn(cur, sem.ver.v)}</b>.</div>`;
+    } else {
+      const otras = BOLSAS.filter(b=>b.b!==nb && !esPadre(b.b))
+        .sort((a,c)=>nomB(a.b).localeCompare(nomB(c.b),'es'));
+      if (!BSA.contra && otras.length) BSA.contra = otras[0].b;
+      h += `<div class="lbl" style="margin:4px 0 5px">La otra bolsa</div>
+        <select id="bsaContra" style="max-width:100%;width:100%;margin-bottom:10px">`
+        + otras.map(b=>`<option value="${b.b}"${b.b===BSA.contra?' selected':''}>${
+            (b.padre?nomB(b.padre)+' · ':'')+nomB(b.b)}</option>`).join('')
+        + `</select>
+        <div class="plan">Voy a registrar un traslado de
+          <b>${montoEn(cur, Math.abs(dif))}</b> ${gasto
+            ? 'desde <b>'+nomB(nb)+'</b> hacia <b>'+nomB(BSA.contra||'')+'</b>'
+            : 'desde <b>'+nomB(BSA.contra||'')+'</b> hacia <b>'+nomB(nb)+'</b>'}.
+          No cuenta como gasto: es plata que se movió sin registrarse.</div>`;
+    }
+    h += `<button class="primary" id="bsaAjustar">Ajustar</button>`;
+  } else if (sem.ver){
+    h += `<div class="hr"></div><p class="note" style="margin-top:14px">Este saldo cuadra
+      con la realidad. Nada que ajustar.</p>`;
+  } else {
+    h += `<div class="hr"></div><p class="note" style="margin-top:14px">Escribí arriba lo que
+      dice el banco o lo que hay en el bolsillo y guardalo. Si no coincide con el calculado,
+      acá te va a aparecer el ajuste rápido.</p>`;
+  }
+  $('#bsaCuerpo').innerHTML = h;
+
+  $('#bsaGuardarVer').onclick = async () => {
+    const t = $('#bsaVer').value;
+    if (t==='') { toast('Escribí un valor', true); return; }
+    VER[nb] = {v:+t||0, fecha:todayISO()};
+    await DB.put('ver', {b:nb, ...VER[nb]});
+    bsaPintar(); renderSaldos(); autoSave();
+    const d = saldoPropio(nb) - VER[nb].v;
+    toast(Math.abs(d)<1 ? nomB(nb)+' cuadra' : 'Diferencia de '+montoEn(cur,d), Math.abs(d)>=1);
+  };
+  $('#bsaBorrarVer').onclick = async () => {
+    delete VER[nb]; await DB.del('ver', nb);
+    bsaPintar(); renderSaldos(); autoSave(); toast('Verificación quitada');
+  };
+  const mm = $$real('#bsaModo');
+  if (mm) mm.onclick = e => { const b=e.target.closest('[data-m]'); if(!b) return;
+    BSA.modo=b.dataset.m; bsaPintar(); };
+  const rr = $$real('#bsaRubros');
+  if (rr) rr.onclick = e => { const b=e.target.closest('[data-r]'); if(!b) return;
+    BSA.rubro=b.dataset.r; bsaPintar(); };
+  const cc = $$real('#bsaContra');
+  if (cc) cc.onchange = e => { BSA.contra=e.target.value; bsaPintar(); };
+  const aj = $$real('#bsaAjustar');
+  if (aj) aj.onclick = ajustar;
+}
+
+async function ajustar(){
+  const nb = BSA.b, info = BOLSA[nb]||{};
+  const cur = info.moneda || 'COP';
+  const sem = semaforo(nb);
+  const dif = sem.dif;
+  if (dif==null || Math.abs(dif)<1){ toast('No hay diferencia que ajustar', true); return; }
+  const abs = Math.abs(dif), gasto = dif>0;
+  const dt = dtLocal(new Date()), f = dt.slice(0,10);
+  const OBS = 'ajuste de conciliación';
+
+  if (BSA.modo==='bolsa'){
+    const otra = BSA.contra;
+    if (!otra){ toast('Elegí la otra bolsa', true); return; }
+    const de = gasto ? nb : otra, a = gasto ? otra : nb;
+    const cDe = monedaDe(de), cA = monedaDe(a);
+    const cop = (de===nb ? abs*trmDe(cur) : abs*trmDe(cur));
+    const m = { id:uuid(), fecha:f, hora:dt.slice(11,16), dt, ym:f.slice(0,7),
+      tipo:'traslado', de, a,
+      deOrig: cDe===cur ? abs : cop/trmDe(cDe),
+      aOrig:  cA ==='COP'? cop : cop/trmDe(cA),
+      valor: cop, obs:OBS, ts:Date.now() };
+    MOV.push(m); await DB.put('mov', m);
+  } else {
+    const r = BSA.rubro;
+    if (!r || !RB[r]){ toast('Elegí un rubro', true); return; }
+    const m = { id:uuid(), fecha:f, hora:dt.slice(11,16), dt, ym:f.slice(0,7),
+      r, bolsa:nb, moneda:cur, valorOrig:abs, tasa:trmDe(cur),
+      valor: Math.round(abs*trmDe(cur)), obs:OBS, ts:Date.now() };
+    MOV.push(m); await DB.put('mov', m);
+  }
+  bsaPintar(); render(); autoSave();
+  const nuevo = saldoPropio(nb);
+  toast(Math.abs(nuevo - sem.ver.v) < 1
+    ? nomB(nb)+' quedó cuadrado' : 'Ajustado, revisá el saldo');
+}
+
+/* ---------- resumen de conciliación en la pantalla de Saldos ---------- */
+function renderConcil(){
+  const hojas = BOLSAS.filter(b=>!esPadre(b.b));
+  const est = hojas.map(b=>({b:b.b, ...semaforo(b.b)}));
+  const mal  = est.filter(x=>x.st==='bad');
+  const tibio= est.filter(x=>x.st==='warn');
+  const ok   = est.filter(x=>x.st==='ok');
+  const sin  = est.filter(x=>x.st==='gris' && Math.abs(saldoPropio(x.b))>1);
+
+  const g = mal.length ? 'bad' : tibio.length ? 'warn' : ok.length ? 'ok' : 'gris';
+  const et = mal.length ? mal.length+' no cuadran'
+           : tibio.length ? tibio.length+' con diferencia menor'
+           : ok.length ? 'todo cuadra' : 'sin verificar';
+  const sm = $$real('#slSem');
+  if (sm){ sm.className = 'sem '+g; sm.innerHTML = '<i></i>'+et; }
+
+  const fila = (x, tono) => {
+    const cur = (BOLSA[x.b]||{}).moneda || 'COP';
+    return `<div class="cat-r" data-conc="${x.b}" style="cursor:pointer">
+      <span style="color:var(--tx)">${nomB(x.b)}</span>
+      <b class="mono" style="color:var(--${tono})">${montoEn(cur, x.dif)}</b>
+      <span style="flex:0 0 auto;color:var(--tx3);min-width:52px;text-align:right">ajustar ›</span>
+    </div>`;
+  };
+  let h = '';
+  if (mal.length)   h += mal.map(x=>fila(x,'bad')).join('');
+  if (tibio.length) h += tibio.map(x=>fila(x,'warn')).join('');
+  if (!h){
+    h = `<p class="note">${ok.length
+      ? '<b>'+ok.length+'</b> bolsas verificadas y cuadradas.'
+      : 'Todavía no verificaste ninguna bolsa.'}
+      ${sin.length ? ' Quedan <b>'+sin.length+'</b> con saldo sin verificar.' : ''}
+      <br><br>Tocá cualquier bolsa de la lista para escribir el saldo real. Si no coincide,
+      te aparece el ajuste rápido.</p>`;
+  } else {
+    h += `<p class="note" style="margin-top:10px">Tocá una para cerrar la diferencia.
+      La tolerancia es mil pesos o medio por ciento del saldo, lo que sea mayor: debajo de
+      eso es redondeo.</p>`;
+  }
+  $('#slConcil').innerHTML = h;
+}
+
 /* =================== navegación y render =================== */
 const TITULOS = {vacio:'Diario', home:'Diario', reg:'Registrar', panel:'Panel del mes',
   obj:'Objetivos', act:'Saldos y activos', hist:'Historial', cfg:'Ajustes'};
@@ -3716,6 +4104,11 @@ $('#hoRubros').onclick = e => {
   if (b.dataset.reg) openPad(b.dataset.reg);
   else if (b.dataset.ir==='mover') abrirMov();
 };
+$('#nuevaVOk').onclick = () => {
+  if (navigator.serviceWorker && navigator.serviceWorker.controller)
+    navigator.serviceWorker.controller.postMessage('actualizar');
+  location.reload();
+};
 $('#vzImportar').onclick = () => $('#vzFile').click();
 $('#vzFile').onchange = async e => {
   const f=e.target.files[0]; if(!f) return;
@@ -3760,13 +4153,16 @@ $('#wizAcep').onclick = () => {
 $('#wizMant').onclick = () => wizFijar(null);
 $('#wizOtro').onkeydown = e => { if (e.key==='Enter') $('#wizAcep').click(); };
 $('#aList').onclick = e => { const b=e.target.closest('[data-act]'); if(b) detalle(b.dataset.act); };
+$('#bsaCerrar').onclick = cerrarBolsa;
+$('#slConcil').onclick = e => { const b=e.target.closest('[data-conc]');
+  if (b) abrirBolsa(b.dataset.conc); };
 $('#slList').onclick = e => {
   const el = e.target.closest('[data-b]'); if(!el) return;
   const b = el.dataset.b;
   if (hijos(b).length){
     renderSaldos.abierta = renderSaldos.abierta===b ? null : b;
     renderSaldos();
-  } else verificar(b);
+  } else abrirBolsa(b);
 };
 $$('#segAct .seg').forEach(b=>b.onclick = () => {
   $$('#segAct .seg').forEach(x=>x.classList.toggle('on', x===b));
@@ -3776,8 +4172,15 @@ $$('#segAct .seg').forEach(b=>b.onclick = () => {
 });
 $('#detBack').onclick = () => { $('#det').style.display='none'; };
 $('#oList').onclick = e => { const id=e.target.dataset.eobj; if(id) editObj(id); };
-$('#cfLifeup').onclick = async e => {
-  await setCfg('lifeup', !CFG.lifeup); e.currentTarget.classList.toggle('on', CFG.lifeup); };
+/* El objeto del evento se recicla al terminar el despacho: después de un
+   await, currentTarget ya es null. Hay que capturar el elemento antes. */
+$('#cfLifeup').onclick = async () => {
+  const el = $$real('#cfLifeup');
+  await setCfg('lifeup', !CFG.lifeup);
+  el.classList.toggle('on', !!CFG.lifeup);
+  renderCfg();
+  toast(CFG.lifeup ? 'LifeUp activado' : 'LifeUp desactivado');
+};
 [['cfCoin','coin'],['cfTasa','tasa'],['cfExp','exp'],
  ['cfTrmEUR','trmEUR'],['cfTrmUSD','trmUSD']].forEach(([id,k])=>
   $('#'+id).onchange = async e => { await setCfg(k, +e.target.value||0); render(); });
@@ -3785,16 +4188,30 @@ $('#cfLifeup').onclick = async e => {
   $('#'+id).onchange = e => setCfg(k, e.target.value.trim()));
 $('#btnTestLife').onclick = () => {
   if (!CFG.lifeup){ toast('Activá la integración primero', true); return; }
-  life('toast',{text:'Diario conectado. Vas a ganar '+CFG.coin+' moneda(s) por registro.',type:1,isLong:true});
+  life('toast',{text:'Diario conectado. Al registrar se '
+    + (CFG.lifeModo==='tarea' ? 'completa la tarea "'+(CFG.tarea||'Registrar movimiento')+'"'
+      : CFG.lifeModo==='exp' ? 'da experiencia' : 'dan '+CFG.coin+' monedas'),
+    type:1, isLong:true});
   toast('Enviado. Si no pasa nada, revisá que LifeUp esté instalado.');
 };
-$('#btnTienda').onclick = tiendaSync;
+$('#btnTienda').onclick = tiendaAbrir;
+$('#btnDeposito').onclick = lifeSobreManual;
+$('#tieSalir').onclick = () => { $('#tie').style.display='none'; };
+$('#cfModo').onchange = async e => {
+  await setCfg('lifeModo', e.target.value);
+  $('#cfModoN').textContent = MODO_N[e.target.value];
+};
 $('#btnTasas').onclick = () => actualizarTasas();
 $('#btnTasas2').onclick = () => actualizarTasas();
 $('#btnDbRef').onclick = renderDb;
 $('#btnOdCon').onclick = odConectar;
 $('#btnOdSync').onclick = () => odSync();
 $('#btnOdOut').onclick = odDesconectar;
+$('#btnOdBase').onclick = async () => {
+  try { await subirBase();
+    toast('Base subida. Ya podés bajarla en los otros dispositivos.'); renderOd(); }
+  catch(e){ toast(e.message, true); }
+};
 $('#odClient').onchange = e => setCfg('odClient', e.target.value.trim());
 $('#btnPersistir').onclick = pedirPersistencia;
 $('#btnExport').onclick = exportar;
@@ -3988,7 +4405,20 @@ async function boot(){
   }
   if (navigator.storage && navigator.storage.persist)
     navigator.storage.persisted().then(p => { if (!p) navigator.storage.persist().catch(()=>{}); }).catch(()=>{});
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
+  if ('serviceWorker' in navigator){
+    navigator.serviceWorker.register('sw.js').then(reg=>{
+      /* si aparece una versión nueva mientras la app está abierta, avisar */
+      reg.addEventListener('updatefound', ()=>{
+        const nuevo = reg.installing;
+        if (!nuevo) return;
+        nuevo.addEventListener('statechange', ()=>{
+          if (nuevo.state==='installed' && navigator.serviceWorker.controller)
+            $('#nuevaV').style.display='block';
+        });
+      });
+      reg.update().catch(()=>{});
+    }).catch(()=>{});
+  }
 }
 boot();
 </script>
