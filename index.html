@@ -650,7 +650,14 @@ input[type=text],input[type=number],input[type=date],select{
   </div>
   <div class="card">
     <h3>Cómo leerlo</h3>
-    <p class="note">Cada sobre se llena con una cuota mensual. El saldo es lo apartado menos lo ejecutado en el año. Un saldo en rojo no es un error: significa que el evento se adelantó y hay que reponerlo desde la holgura o recortar otro sobre. Lo que manda es el saldo, no el mes.</p>
+    <p class="note">Cada sobre tiene su <b>periodo de vigencia</b>. La cuota mensual es lo
+      que esperás gastar de ese sobre en el mes; multiplicada por los meses del periodo da
+      el sobre completo. El saldo compara lo apartado hasta hoy contra lo ejecutado
+      <b>dentro del periodo</b>, no contra el año calendario.<br><br>
+      Un saldo en rojo no es un error: significa que el evento se adelantó, y hay que
+      reponerlo desde la holgura o recortar otro sobre. Lo que manda es el saldo, no el mes.
+      <br><br><b>Tocá un sobre para cambiar su vigencia.</b> Por defecto va de enero a
+      diciembre del año que estés viendo.</p>
   </div>
   </div>
 
@@ -1123,13 +1130,7 @@ input[type=text],input[type=number],input[type=date],select{
   </div>
   <div class="wz-track"><i id="wizProg" style="width:0%"></i></div>
   <div id="wizCuerpo"></div>
-  <div id="wizPie">
-    <input type="number" id="wizOtro" placeholder="Escribir otro monto" step="1000">
-    <div class="row">
-      <button class="primary gray" id="wizMant">Dejar como está</button>
-      <button class="primary" id="wizAcep">Aceptar</button>
-    </div>
-  </div>
+  <div id="wizPie"></div>
 </div>
 
 <div id="bed" style="position:fixed;inset:0;z-index:78;background:var(--bg);display:none;
@@ -1251,7 +1252,7 @@ input[type=text],input[type=number],input[type=date],select{
 <div id="toast"></div>
 <script>
 'use strict';
-const VERSION = '2026.07.29-8';   /* subí esto en cada cambio publicado */
+const VERSION = '2026.07.29-9';   /* subí esto en cada cambio publicado */
 /* ===================================================================
    Diario · Presupuesto — PWA local-first
    Los datos viven en IndexedDB en este dispositivo. Nada sale de acá
@@ -1841,34 +1842,94 @@ function renderPanel(){
   renderCats();
 }
 
+
+/* =================================================================
+   VIGENCIA DE LOS SOBRES
+   Un sobre no siempre corre de enero a diciembre. Un viaje puede
+   juntarse en seis meses; la maestría termina en una fecha conocida.
+   Cada sobre tiene su periodo, y de ahí sale todo: la cuota es la meta
+   repartida en los meses de vigencia, y el saldo compara lo apartado
+   contra lo ejecutado DENTRO del periodo, no contra el año calendario.
+   ================================================================= */
+const mesesEntre = (a,b) => {
+  const [ay,am]=a.split('-').map(Number), [by,bm]=b.split('-').map(Number);
+  return Math.max(1, (by-ay)*12 + (bm-am) + 1);
+};
+const sumaMes = (ym,n) => {
+  let [y,m]=ym.split('-').map(Number);
+  m+=n; y += Math.floor((m-1)/12); m=((m-1)%12+12)%12+1;
+  return y+'-'+pad2(m);
+};
+
+function vigencia(r){
+  const cfg = (CFG.sobres||{})[r];
+  const anio = ym.slice(0,4);
+  const desde = (cfg && cfg.desde) || anio+'-01';
+  const hasta = (cfg && cfg.hasta) || anio+'-12';
+  const n = mesesEntre(desde, hasta);
+  /* meses ya corridos dentro del periodo, contando el visible */
+  const t = ym < desde ? 0 : ym > hasta ? n : mesesEntre(desde, ym);
+  return {desde, hasta, meses:n, corridos:t, dentro: ym>=desde && ym<=hasta};
+}
+
+/* lo ejecutado dentro del periodo de vigencia */
+function ejecVigencia(r, v){
+  let t=0, m=v.desde;
+  for (let i=0;i<v.meses;i++){ t += exec(r, m); m = sumaMes(m,1); }
+  return t;
+}
+
+function sobreDe(r){
+  const v = vigencia(r);
+  const cuota = budget(r, ym);              /* lo que esperás gastar en el mes */
+  const meta  = cuota * v.meses;            /* el sobre completo del periodo */
+  const ejec  = ejecVigencia(r, v);
+  const apartado = cuota * v.corridos;
+  return {...v, r, cuota, meta, ejec, apartado, saldo: apartado - ejec};
+}
+
+async function editarVigencia(r){
+  const v = vigencia(r);
+  const d = prompt(`Vigencia del sobre «${r}»\nDesde qué mes (AAAA-MM)`, v.desde);
+  if (d===null) return;
+  const h = prompt('Hasta qué mes (AAAA-MM)', v.hasta);
+  if (h===null) return;
+  if (!/^\d{4}-\d{2}$/.test(d) || !/^\d{4}-\d{2}$/.test(h) || h < d){
+    toast('Fechas inválidas', true); return;
+  }
+  const sob = {...(CFG.sobres||{})};
+  sob[r] = {desde:d, hasta:h};
+  await setCfg('sobres', sob);
+  render(); autoSave();
+  toast(`«${r}»: ${mesesEntre(d,h)} meses de vigencia`);
+}
+
 /* =================== render: sobres =================== */
 function renderSobres(){
-  const anio = +ym.slice(0,4), mes = +ym.slice(5,7);
-  $('#sAnio').textContent = anio;
-  const evs = rubrosDe('Evento').map(r=>{
-    const cuota = budget(r, ym);
-    const sobre = cuota*12;
-    const apartado = cuota*mes;
-    let ejec=0;
-    for (let m=1;m<=12;m++) ejec += exec(r, anio+'-'+pad2(m));
-    return { r, sobre, cuota, apartado, ejec, saldo: apartado-ejec };
-  }).filter(x=>x.sobre>0 || x.ejec>0).sort((a,b)=>b.sobre-a.sobre);
+  const evs = rubrosDe('Evento').map(sobreDe)
+    .filter(x=>x.meta>0 || x.ejec>0)
+    .sort((a,b)=>b.meta-a.meta);
   const tot = evs.reduce((s,x)=>s+x.saldo,0);
+  $('#sAnio').textContent = '';
   $('#sTot').textContent = money(tot);
-  $('#sTot').style.color = tot<0?'var(--bad)':'var(--ok)';
-  $('#sNota').textContent = 'Sobres por '+money(evs.reduce((s,x)=>s+x.sobre,0))
-    +' al año · cuota mensual '+money(evs.reduce((s,x)=>s+x.cuota,0));
+  $('#sTot').style.color = tot<0 ? 'var(--bad)' : 'var(--ok)';
+  $('#sNota').textContent = 'Cuota mensual total ' + money(evs.reduce((s,x)=>s+x.cuota,0))
+    + ' · comprometido en los periodos vigentes ' + money(evs.reduce((s,x)=>s+x.meta,0));
   $('#sList').innerHTML = evs.map(x=>{
-    const pct = x.sobre>0 ? Math.min(100, x.ejec/x.sobre*100) : 100;
-    const st = x.ejec>x.sobre ? 'bad' : x.saldo<0 ? 'warn' : 'ok';
-    const tag = x.ejec>x.sobre?'sobre agotado':x.saldo<0?'adelantado':'ok';
-    return `<div class="pr st-${st}">
+    const pct = x.meta>0 ? Math.min(100, x.ejec/x.meta*100) : 100;
+    const st = x.ejec>x.meta ? 'bad' : x.saldo<0 ? 'warn' : 'ok';
+    const tag = x.ejec>x.meta ? 'sobre agotado' : x.saldo<0 ? 'adelantado' : 'ok';
+    const per = x.meses===12 && x.desde.endsWith('-01')
+      ? ymLabel(x.desde).slice(-4)
+      : ymLabel(x.desde)+' → '+ymLabel(x.hasta);
+    return `<div class="pr st-${st}" data-sob="${x.r}" style="cursor:pointer">
       <div class="l1"><div class="nm">${x.r}</div>
         <div class="vv mono">saldo ${money(x.saldo)}</div></div>
       <div class="track"><i style="width:${pct}%"></i>
-        <s style="left:${Math.min(100,x.apartado/(x.sobre||1)*100)}%"></s></div>
+        <s style="left:${Math.min(100, x.meta? x.apartado/x.meta*100 : 0)}%"></s></div>
       <div class="l2"><span class="tag">${tag}</span>
-        <span class="mono">${money(x.ejec)} de ${money(x.sobre)} · cuota ${money(x.cuota)}</span></div>
+        <span class="mono">${money(x.ejec)} de ${money(x.meta)} · ${per}
+          · mes ${x.corridos}/${x.meses} · cuota ${money(x.cuota)}</span></div>
     </div>`;
   }).join('');
 }
@@ -2747,6 +2808,14 @@ function wizPintar(){
       ? `<div class="wz-delta ${delta>0?'up':'dn'}">${delta>0?'+':''}${(delta*100).toFixed(0)}% · ${money(s.val-it.act)}</div>`
       : '<div class="wz-delta">sin cambio</div>'}
     <div class="wz-met">${s.metodo}</div>
+    ${it.nat==='Evento' ? (()=>{ const v=vigencia(it.r); const sug=s.val;
+      return `<div class="plan" style="margin-top:14px">Es un <b>sobre</b>: lo que fijes es
+        <b>lo que esperás gastar de él en un mes</b>. Su vigencia va de
+        <b>${ymLabel(v.desde)}</b> a <b>${ymLabel(v.hasta)}</b>, ${v.meses} meses, así que
+        ${money(sug)} al mes son <b>${money(sug*v.meses)}</b> en todo el periodo.
+        Vas por el mes ${v.corridos} de ${v.meses}.
+        <br><br>La vigencia se cambia tocando el sobre en Panel → Sobres.</div>`;
+    })() : ''}
     ${RB[it.r] && RB[it.r].aviso
       ? `<div class="warnbox" style="margin-top:14px">${RB[it.r].aviso}</div>` : ''}
     ${chispas(s.v6)}
@@ -2757,7 +2826,21 @@ function wizPintar(){
       <tr><td>Tendencia año contra año</td><td class="mono">${
         s.tend==null?'—':(s.tend>0?'+':'')+(s.tend*100).toFixed(0)+'%'}</td></tr>
     </table>`;
-  $('#wizOtro').value = '';
+  /* El pie se reconstruye en cada paso. Antes se vinculaba una sola vez al
+     arrancar la app, y el resumen final lo reemplazaba: al volver a abrir el
+     asistente los botones ya no existían y no se podía recalibrar de nuevo. */
+  $('#wizPie').innerHTML =
+    `<input type="number" id="wizOtro" placeholder="Escribir otro monto" step="1000">
+     <div class="row">
+       <button class="primary gray" id="wizMant">Dejar como está</button>
+       <button class="primary" id="wizAcep">Aceptar</button>
+     </div>`;
+  $('#wizAcep').onclick = () => {
+    const otro = $$real('#wizOtro').value;
+    wizFijar(otro!=='' ? +otro : WZ.lista[WZ.i].sug.val);
+  };
+  $('#wizMant').onclick = () => wizFijar(null);
+  $('#wizOtro').onkeydown = e => { if (e.key==='Enter') $('#wizAcep').click(); };
   /* cuando la ejecución registrada no refleja la realidad, lo prudente es no tocar */
   const dudoso = !!(RB[it.r] && RB[it.r].aviso);
   $('#wizAcep').className = 'primary' + (dudoso ? ' gray' : '');
@@ -3708,10 +3791,7 @@ function renderHome(){
     const o = RB[r];
     let d;
     if (o.nat==='Evento'){
-      const cu = budget(r, ym), mes = +ym.slice(5,7);
-      let ej = 0;
-      for (let i=1;i<=12;i++) ej += exec(r, ym.slice(0,4)+'-'+pad2(i));
-      d = cu*mes - ej;                       /* saldo del sobre */
+      d = sobreDe(r).saldo;                  /* saldo del sobre en su vigencia */
     } else {
       const e = estado(r, ym); d = e.disp;   /* lo que queda del mes */
     }
@@ -3760,11 +3840,7 @@ function renderHome(){
   const holg = holgura(ym);
   const liq = BOLSAS.filter(b=>!b.padre && b.grupo==='Disponible')
     .reduce((s,b)=>s+enPesos(b.b, saldoDe(b.b)), 0);
-  const sob = rubrosDe('Evento').reduce((s,r)=>{
-    const cu=budget(r,ym), mes=+ym.slice(5,7); let ej=0;
-    for(let i=1;i<=12;i++) ej+=exec(r, ym.slice(0,4)+'-'+pad2(i));
-    return s + (cu*mes - ej);
-  },0);
+  const sob = rubrosDe('Evento').reduce((s,r)=>s + sobreDe(r).saldo, 0);
   const cards = [
     {k:'Holgura del mes', n:money(holg), c:neto()?(holg/neto()*100).toFixed(1)+'% del neto':'',
      st: holg<0?'bad':holg/neto()<0.10?'warn':'ok', ir:'panel'},
@@ -3787,10 +3863,7 @@ function renderHome(){
   const sinVal = ACT.filter(a=>a.estado!=='cerrado' && !valDe(a.id));
   if (sinVal.length) av.push({st:'warn', t:`<b>${sinVal.length}</b> activos sin valorar`,
     d:'sin eso no hay rentabilidad medible', ir:'act'});
-  const sobNeg = rubrosDe('Evento').filter(r=>{
-    const cu=budget(r,ym), mes=+ym.slice(5,7); let ej=0;
-    for(let i=1;i<=12;i++) ej+=exec(r, ym.slice(0,4)+'-'+pad2(i));
-    return cu*mes-ej < 0; });
+  const sobNeg = rubrosDe('Evento').filter(r=>sobreDe(r).saldo < 0);
   if (sobNeg.length) av.push({st:'warn', t:`<b>${sobNeg.length}</b> sobres adelantados`,
     d:sobNeg.slice(0,3).join(', '), ir:'panel'});
   if (!odActivo()) av.push({st:'warn', t:'Sincronización sin conectar',
@@ -4210,6 +4283,8 @@ document.addEventListener('click', e => {
   view = b.dataset.ir; render();
 });
 $('#btnRecal').onclick = wizAbrir;
+$('#sList').onclick = e => { const b=e.target.closest('[data-sob]');
+  if (b) editarVigencia(b.dataset.sob); };
 $$('.segrow .seg[data-pv]').forEach(b=>b.onclick = () => {
   $$('.segrow .seg[data-pv]').forEach(x=>x.classList.toggle('on', x===b));
   const v = b.dataset.pv;
@@ -4223,12 +4298,6 @@ $('#pCats').onclick = e => {
   renderCats();
 };
 $('#wizSalir').onclick = wizCerrar;
-$('#wizAcep').onclick = () => {
-  const otro = $('#wizOtro').value;
-  wizFijar(otro!=='' ? +otro : WZ.lista[WZ.i].sug.val);
-};
-$('#wizMant').onclick = () => wizFijar(null);
-$('#wizOtro').onkeydown = e => { if (e.key==='Enter') $('#wizAcep').click(); };
 $('#aList').onclick = e => { const b=e.target.closest('[data-act]'); if(b) detalle(b.dataset.act); };
 $('#bsaCerrar').onclick = cerrarBolsa;
 $('#slConcil').onclick = e => { const b=e.target.closest('[data-conc]');
