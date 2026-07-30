@@ -1251,7 +1251,7 @@ input[type=text],input[type=number],input[type=date],select{
 <div id="toast"></div>
 <script>
 'use strict';
-const VERSION = '2026.07.29-7';   /* subí esto en cada cambio publicado */
+const VERSION = '2026.07.29-8';   /* subí esto en cada cambio publicado */
 /* ===================================================================
    Diario · Presupuesto — PWA local-first
    Los datos viven en IndexedDB en este dispositivo. Nada sale de acá
@@ -4140,6 +4140,7 @@ $('#regUlt').onclick = async e => {
   render(); autoSave(); toast('Movimiento borrado');
 };
 $('#pad').onclick = e => {
+  if (enCampo(e.target)) return;
   const k=e.target.dataset.k, b=e.target.dataset.b;
   if (k) key(k);
   if (b){ pad.bolsa=b; $$('#padBolsas .chipbtn').forEach(x=>
@@ -4160,7 +4161,12 @@ $('#padFechas').onclick = e => {
   }
   padFechas();
 };
-$('#padDT').onchange = e => { if(e.target.value){ pad.dt=e.target.value; padFechas(); } };
+$('#padDT').onchange = e => {
+  if (!e.target.value) return;
+  pad.dt = e.target.value;
+  padFechas();            /* no toca pad.v: el monto queda como estaba */
+  drawAmt();
+};
 $('#padBack').onclick = closePad;
 $('#padSave').onclick = guardar;
 $('#btnCerrarDia').onclick = () => {
@@ -4384,8 +4390,17 @@ $('#btnAddRubro').onclick = async () => {
   $('#nrN').value=''; $('#nrPto').value='';
   toast(n+' agregado en '+catNom(cat)); render(); autoSave();
 };
+/* El atajo de teclado del teclado numérico escucha toda la página. Si el foco
+   está en un campo —la fecha, la hora, la observación— las teclas son para ese
+   campo, no para el monto: escribir una fecha cambiaba la cifra. */
+const enCampo = t => !!t && (t.tagName==='INPUT' || t.tagName==='SELECT'
+                          || t.tagName==='TEXTAREA' || t.isContentEditable);
 document.addEventListener('keydown', e => {
   if (!$('#pad').classList.contains('on')) return;
+  if (enCampo(e.target)){
+    if (e.key==='Escape') e.target.blur();
+    return;
+  }
   if (/^[0-9]$/.test(e.key)) key(e.key);
   else if (e.key==='Backspace') key('del');
   else if (e.key==='Enter') guardar();
