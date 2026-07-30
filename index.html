@@ -1110,9 +1110,12 @@ input[type=text],input[type=number],input[type=date],select{
     <button class="primary gray" id="btnExport" style="margin-bottom:8px">Exportar respaldo a un archivo</button>
     <button class="primary gray" id="btnImport">Importar y fusionar</button>
     <input type="file" id="fileIn" accept=".json" style="display:none">
-    <p class="note" style="margin-top:10px">El registro es un log que solo crece, con identificador
-      único por movimiento. Fusionar dos dispositivos es unir los logs: capturar nunca produce
-      conflicto.</p>
+    <p class="note" style="margin-top:10px">Ese botón acepta los dos archivos:
+      un <b>respaldo</b> de otro dispositivo, que se funde con lo que ya tenés, o
+      <b>datos-iniciales.json</b>, que reemplaza la base y agrega lo que todavía
+      no exista. En ninguno de los dos casos se pierden tus movimientos.<br><br>
+      El registro es un log que solo crece, con identificador único por movimiento.
+      Fusionar dos dispositivos es unir los logs: capturar nunca produce conflicto.</p>
   </div>
 
   <div class="card">
@@ -1445,7 +1448,7 @@ input[type=text],input[type=number],input[type=date],select{
 <div id="toast"></div>
 <script>
 'use strict';
-const VERSION = '2026.07.30-10';   /* subí esto en cada cambio publicado */
+const VERSION = '2026.07.30-11';   /* subí esto en cada cambio publicado */
 /* ===================================================================
    Diario · Presupuesto — PWA local-first
    Los datos viven en IndexedDB en este dispositivo. Nada sale de acá
@@ -2732,6 +2735,36 @@ async function exportar(){
   a.click(); URL.revokeObjectURL(a.href);
   toast('Respaldo exportado');
 }
+/* Dos archivos distintos y una sola puerta de entrada.
+
+   · datos-iniciales.json  (app: 'diario-presupuesto-base')
+     Es la base: rubros, presupuesto calibrado, saldos de apertura, histórico.
+     Cuando la vuelvo a generar con algo nuevo —como el módulo de pensión—
+     hay que poder recargarla sin reinstalar. Reemplaza la base y siembra
+     únicamente lo que todavía esté vacío: tus movimientos, presupuestos
+     editados, objetivos y verificaciones no se tocan.
+
+   · diario-AAAA-MM-DD.json  (app: 'diario-presupuesto')
+     Es un respaldo de otro dispositivo. Se funde: se unen los logs.
+
+   Antes el botón solo aceptaba el segundo y rechazaba el primero con
+   «Archivo no reconocido», que no decía nada útil. */
+async function importar(d){
+  if (!d || typeof d!=='object') throw new Error('Eso no es un JSON válido');
+  if (d.app==='diario-presupuesto-base'){
+    if (!d.seed || !d.hist) throw new Error('La base está incompleta');
+    const antes = PEN.length;
+    await guardarBase(d, true);
+    PEN = await DB.all('pen');
+    const nuevos = PEN.length - antes;
+    toast('Base actualizada'
+      + (nuevos>0 ? ' · '+nuevos+' registros de pensión cargados' : ''));
+    return;
+  }
+  if (d.app==='diario-presupuesto'){ await fusionar(d); return; }
+  throw new Error('Archivo no reconocido: dice «'+(d.app||'sin nombre')+'»');
+}
+
 async function fusionar(data, silencio){
   if (!data || data.app!=='diario-presupuesto'){
     if(!silencio) toast('Archivo no reconocido', true); return; }
@@ -4240,6 +4273,8 @@ async function bajarBase(){
 
 async function importarArchivo(f){
   const d = JSON.parse(await f.text());
+  if (d.app==='diario-presupuesto') throw new Error(
+    'Ese es un respaldo, no la base. Necesitás datos-iniciales.json');
   await guardarBase(d, true);
   toast('Listo: '+nf.format(d.hist.n)+' movimientos cargados');
 }
@@ -4996,8 +5031,8 @@ $('#btnExport').onclick = exportar;
 $('#btnImport').onclick = () => $('#fileIn').click();
 $('#fileIn').onchange = async e => {
   const f=e.target.files[0]; if(!f) return;
-  try { await fusionar(JSON.parse(await f.text())); }
-  catch(err){ toast('No se pudo leer el archivo', true); }
+  try { await importar(JSON.parse(await f.text())); }
+  catch(err){ toast(err.message||'No se pudo leer el archivo', true); }
   e.target.value='';
 };
 $('#cfPto').onchange = async e => {
