@@ -1251,7 +1251,7 @@ input[type=text],input[type=number],input[type=date],select{
 <div id="toast"></div>
 <script>
 'use strict';
-const VERSION = '2026.07.29-5';   /* subí esto en cada cambio publicado */
+const VERSION = '2026.07.29-7';   /* subí esto en cada cambio publicado */
 /* ===================================================================
    Diario · Presupuesto — PWA local-first
    Los datos viven en IndexedDB en este dispositivo. Nada sale de acá
@@ -1371,6 +1371,17 @@ const DB = (()=>{
   };
 })();
 
+/* =================================================================
+   BORRADO
+   La sincronización une los registros de los dos dispositivos por
+   identificador. Si borrar quitara la fila, el otro dispositivo la
+   volvería a mandar y el movimiento reviviría. Así que borrar deja
+   una marca de baja con fecha: la fila queda, pero fuera de todos
+   los cálculos, y la marca viaja igual que el resto.
+   ================================================================= */
+const vivo = m => !m.borrado;
+const MOVV = () => MOV.filter(vivo);
+
 /* ---------- presupuesto y ejecución ---------- */
 function budget(r, y){
   const k = r+'|'+y;
@@ -1386,7 +1397,7 @@ function baseExec(r, y){
 }
 function exec(r, y){
   let v = (y <= CFG.baseHasta) ? baseExec(r,y) : 0;
-  for (const m of MOV) if (m.r===r && m.ym===y) v += m.valor;
+  for (const m of MOV) if (vivo(m) && m.r===r && m.ym===y) v += m.valor;
   return v;
 }
 const NAT_PTO = ['Comprometido','Hábito','Evento','Deuda','Ahorro'];
@@ -1530,7 +1541,7 @@ async function guardar(){
   const orig = +pad.v;
   if (!orig){ toast('Poné un monto', true); return; }
   const r = pad.r;
-  const bolsa = pad.bolsa || (RB[r]?RB[r].bolsa:null) || 'Caja';
+  const bolsa = bolsaHoja(pad.bolsa || (RB[r]?RB[r].bolsa:null) || 'Caja');
   const cur = monedaDe(bolsa), tasa = trmDe(cur);
   const dt = pad.dt || dtLocal(new Date());
   const f  = dt.slice(0,10);
@@ -1579,7 +1590,9 @@ function padFechas(){
 }
 
 function openPad(r){
-  pad = { r, v:'', bolsa: (RB[r]&&RB[r].bolsa) || 'Caja', dt: dtLocal(new Date()) };
+  armarBolsas();
+  pad = { r, v:'', bolsa: bolsaHoja((RB[r]&&RB[r].bolsa) || 'Caja'),
+          dt: dtLocal(new Date()) };
   $('#padDT').style.display='none';
   padFechas();
   $('#padRubro').textContent = r;
@@ -1731,13 +1744,13 @@ function renderReg(){
     : 'disponible en hábitos';
 
   const hoy = todayISO();
-  const dia = MOV.filter(m=>m.fecha===hoy && m.tipo!=='traslado');
+  const dia = MOV.filter(m=>vivo(m) && m.fecha===hoy && m.tipo!=='traslado');
   const nHoy = dia.length;
   const gHoy = dia.reduce((s,m)=>s+m.valor,0);
   $('#regHoy').innerHTML = nHoy
     ? `<b>${nHoy}</b> ${nHoy===1?'registro':'registros'} hoy · <b>${money(gHoy)}</b>`
     : 'sin registros hoy';
-  const nMes = MOV.filter(m=>m.ym===ym && m.tipo!=='traslado').length;
+  const nMes = MOV.filter(m=>vivo(m) && m.ym===ym && m.tipo!=='traslado').length;
   $('#regMes').innerHTML = `<b>${nMes}</b> en ${ymLabel(ym)}`;
 
   renderChips();
@@ -1776,7 +1789,7 @@ function renderReg(){
   $('#regGrid').innerHTML = html;
 
   const cuando = m => (m.dt || (m.fecha+'T'+(m.hora||'00:00')));
-  const ult = [...MOV].sort((a,b)=> cuando(a)<cuando(b)?1:-1).slice(0,7);
+  const ult = MOVV().sort((a,b)=> cuando(a)<cuando(b)?1:-1).slice(0,7);
   $('#regUltH').textContent = ult.length ? 'Últimos registros' : '';
   $('#regUlt').innerHTML = ult.length ? ult.map(m=>{
     if (m.tipo==='traslado') return `<div class="rec-r">
@@ -1995,7 +2008,7 @@ function renderCfg(){
   $('#cfTarea').value=CFG.tarea;
   $('#cfUrl').value = CFG.url || redirectUri();
   $('#cfTrmEUR').value=CFG.trmEUR; $('#cfTrmUSD').value=CFG.trmUSD;
-  const fx = MOV.filter(m=>m.moneda && m.moneda!=='COP');
+  const fx = MOV.filter(m=>vivo(m) && m.moneda && m.moneda!=='COP');
   const porCur = {};
   fx.forEach(m=>{ porCur[m.moneda]=(porCur[m.moneda]||0)+m.valorOrig; });
   $('#cfMonAvisos').innerHTML = fx.length
@@ -2035,7 +2048,10 @@ function renderCfg(){
       +'<br><br>La naturaleza se revisa con los últimos 12 meses. Cambiala arriba si estás de acuerdo.'
     : 'Ningún rubro cambió de naturaleza en los últimos 12 meses.';
 
-  $('#cfStats').innerHTML = `${MOV.length} movimientos registrados en este dispositivo.<br>
+  const nBaja = MOV.filter(m=>m.borrado).length;
+  $('#cfStats').innerHTML = `${MOVV().length} movimientos registrados en este dispositivo`
+    + (nBaja ? `, más ${nBaja} dados de baja que se conservan para que no revivan al sincronizar` : '')
+    + `.<br>
     ${S.rubros.length} rubros · ${S.bolsas.length} bolsas.<br>
     ${ACT.length} activos · ${FLU.length} flujos · ${VAL.length} valoraciones.<br>
     Base histórica del Excel hasta ${ymLabel(CFG.baseHasta)} (${Object.keys(S.ejecucion).length} rubros con datos).<br>
@@ -2067,9 +2083,14 @@ async function exportar(){
 async function fusionar(data, silencio){
   if (!data || data.app!=='diario-presupuesto'){
     if(!silencio) toast('Archivo no reconocido', true); return; }
-  const have = new Set(MOV.map(m=>m.id));
-  let add=0;
-  for (const m of (data.mov||[])) if (!have.has(m.id)){ MOV.push(m); await DB.put('mov',m); add++; }
+  const idx = new Map(MOV.map(m=>[m.id,m]));
+  let add=0, bajas=0;
+  for (const m of (data.mov||[])){
+    const mio = idx.get(m.id);
+    if (!mio){ MOV.push(m); await DB.put('mov',m); add++; if (m.borrado) bajas++; continue; }
+    /* una baja gana siempre: si cualquiera de los dos lados lo borró, queda borrado */
+    if (m.borrado && !mio.borrado){ mio.borrado = m.borrado; await DB.put('mov', mio); bajas++; }
+  }
   for (const p of (data.pto||[])) if (p.v!=null){ PTO[p.k]=p.v; await DB.put('pto',{k:p.k,v:p.v,ts:p.ts||0}); }
   const oid = new Set(OBJ.map(o=>o.id));
   for (const o of (data.obj||[])){
@@ -2083,8 +2104,9 @@ async function fusionar(data, silencio){
     for (const x of (arr||[])) if (!ids.has(x.id)){ cur.push(x); await DB.put(store,x); }
   }
   render();
-  if (!silencio) toast('Fusionado: '+add+' movimientos nuevos');
-  else if (add) toast('Llegaron '+add+' movimientos del otro dispositivo');
+  if (!silencio) toast('Fusionado: '+add+' nuevos'+(bajas?', '+bajas+' de baja':''));
+  else if (add||bajas) toast('Del otro dispositivo: '+add+' nuevos'
+    +(bajas?', '+bajas+' borrados':''));
 }
 async function vincularArchivo(){
   if (!window.showSaveFilePicker){ toast('No soportado en este navegador', true); return; }
@@ -2821,15 +2843,32 @@ function armarBolsas(){
   BOLSAS.forEach(b=>BOLSA[b.b]=b);
 }
 const nomB   = b => (BOLSA[b] && BOLSA[b].alias) || b;
+/* Los rubros traen su bolsa habitual del histórico, y algunas de esas
+   bolsas hoy son cuentas con bolsillos. Un movimiento no puede caer en la
+   cuenta: cae en su bolsillo principal, o el saldo queda sin poder
+   conciliarse. */
+function bolsaHoja(b){
+  if (!b) return 'Caja';
+  const hs = hijos(b);
+  if (!hs.length) return b;
+  const pri = hs.find(h=>/disponible|principal/i.test(h.b));
+  return (pri || hs[0]).b;
+}
 const hijos  = p => BOLSAS.filter(b=>b.padre===p);
 const esPadre= b => !!(BOLSA[b] && BOLSA[b].esPadre) || hijos(b).length>0;
 const GRUPOS = ['Disponible','Ahorro e inversión','Prestado','Deuda'];
 
-function deltaLocal(nb){
+/* Efecto de los movimientos de la app sobre una bolsa, opcionalmente
+   solo hasta una fecha. Conciliar exige comparar contra el saldo que
+   había EL DÍA de la verificación: los movimientos posteriores son
+   cambios legítimos, no descuadres. */
+function deltaLocal(nb, hasta){
   /* efecto de los movimientos registrados en la app sobre una bolsa */
   let d = 0;
   const info = BOLSA[nb] || {tipo:'Electronico'};
   for (const m of MOV){
+    if (m.borrado) continue;
+    if (hasta && m.fecha > hasta) continue;
     if (m.tipo==='traslado'){
       if (m.de===nb) d -= m.deOrig;
       if (m.a ===nb) d += m.aOrig;
@@ -2856,7 +2895,7 @@ function deltaLocal(nb){
 }
 
 /* el saldo de una cuenta con bolsillos es la suma de sus bolsillos */
-const saldoPropio = nb => (BOLSA[nb] ? BOLSA[nb].saldo : 0) + deltaLocal(nb);
+const saldoPropio = (nb, hasta) => (BOLSA[nb] ? BOLSA[nb].saldo : 0) + deltaLocal(nb, hasta);
 const saldoDe = nb => saldoPropio(nb) + hijos(nb).reduce((s,h)=>s+saldoPropio(h.b),0);
 const enPesos = (nb, s) => {
   const c = BOLSA[nb] ? BOLSA[nb].moneda : 'COP';
@@ -3121,7 +3160,7 @@ function exportarCSV(){
     return /[;"\n]/.test(t) ? '"'+t.replace(/"/g,'""')+'"' : t; };
   const num = v => String(Math.round(v*100)/100).replace('.',',');
   const rows=[H];
-  for (const m of [...MOV].sort((x,y)=>x.fecha<y.fecha?-1:1)){
+  for (const m of MOVV().sort((x,y)=>x.fecha<y.fecha?-1:1)){
     const [Y,Mo] = [m.fecha.slice(0,4), String(+m.fecha.slice(5,7))];
     if (m.tipo==='traslado'){
       rows.push([Y,Mo,m.fecha,m.hora||'',' Retiro'.trim(),'Movimiento','',nomB(m.de),num(m.deOrig),
@@ -3187,11 +3226,11 @@ function rehidratar(){
 
 /* lo registrado en la app se suma al histórico, con la misma forma */
 function universo(){
-  const loc = MOV.filter(m=>m.tipo!=='traslado').map(m=>({
+  const loc = MOV.filter(m=>vivo(m) && m.tipo!=='traslado').map(m=>({
     f:m.fecha, r:m.r, c:(RB[m.r]||{}).cat||'', b:m.bolsa,
     v:m.valor, o:m.obs||'', i:(RB[m.r]||{}).nat==='Ingreso'?1:0,
     m:m.moneda||'COP', vo:m.valorOrig!=null?m.valorOrig:m.valor, src:'app'}));
-  const tras = (HFIL.tipo==='todo'||HFIL.tipo==='traslado') ? MOV.filter(m=>m.tipo==='traslado').map(m=>({
+  const tras = (HFIL.tipo==='todo'||HFIL.tipo==='traslado') ? MOV.filter(m=>vivo(m) && m.tipo==='traslado').map(m=>({
     f:m.fecha, r:'⇄ '+nomB(m.de)+' → '+nomB(m.a), c:'Traslado', b:nomB(m.de),
     v:m.valor, o:m.obs||'', i:0, m:'COP', vo:m.valor, src:'app'})) : [];
   return [...(HIST||[]), ...loc, ...tras];
@@ -3433,6 +3472,16 @@ function exportarHist(){
 const OD_BASE = 'https://graph.microsoft.com/v1.0/me/drive/special/approot:/base.json';
 
 async function sembrar(){
+  /* Los saldos de apertura salen de la columna "Saldo Verificado" del Excel:
+     son los que ya estaban cuadrados contra el banco al corte. Sembrarlos
+     como verificaciones deja el semáforo vivo desde el primer día. */
+  if (!Object.keys(VER).length && SS && SS.bolsas){
+    for (const b of SS.bolsas){
+      if (Math.abs(b.saldo) < 0.005) continue;
+      VER[b.b] = {v:b.saldo, fecha:SS.corte};
+      await DB.put('ver', {b:b.b, v:b.saldo, fecha:SS.corte});
+    }
+  }
   /* activos, flujos, valoraciones y objetivos solo se siembran una vez */
   if (!ACT.length){
     ACT = SA.activos.map(a=>({...a}));
@@ -3721,7 +3770,7 @@ function renderHome(){
      st: holg<0?'bad':holg/neto()<0.10?'warn':'ok', ir:'panel'},
     {k:'Liquidez', n:money(liq), c:'en efectivo y cuentas', st:liq<0?'bad':'', ir:'act'},
     {k:'Sobres', n:money(sob), c:'saldo apartado', st:sob<0?'warn':'ok', ir:'panel'},
-    {k:'Registros del mes', n:nf.format(MOV.filter(m=>m.ym===ym&&m.tipo!=='traslado').length),
+    {k:'Registros del mes', n:nf.format(MOV.filter(m=>vivo(m)&&m.ym===ym&&m.tipo!=='traslado').length),
      c:'movimientos cargados acá', st:'', ir:'hist'}
   ];
   $('#hoCards').innerHTML = cards.map(x=>
@@ -3786,10 +3835,16 @@ function semaforo(nb){
   if (hijos(nb).length) return {st:'gris', et:'suma de bolsillos', dif:null};
   const v = VER[nb];
   if (!v) return {st:'gris', et:'sin verificar', dif:null};
-  const s = saldoPropio(nb), dif = s - v.v, tol = tolerancia(v.v);
-  if (Math.abs(dif) < 1)   return {st:'ok',   et:'cuadra',    dif:0, ver:v};
-  if (Math.abs(dif) <= tol) return {st:'warn', et:'diferencia menor', dif, ver:v};
-  return {st:'bad', et:'no cuadra', dif, ver:v};
+  /* el saldo que el sistema creía tener EL DÍA de la verificación */
+  const alDia = saldoPropio(nb, v.fecha);
+  const dif = alDia - v.v, tol = tolerancia(v.v);
+  const dias = Math.round((Date.now() - new Date(v.fecha+'T12:00'))/864e5);
+  const post = saldoPropio(nb) - alDia;    /* movimientos posteriores */
+  const base = {dif, ver:v, alDia, dias, post};
+  if (Math.abs(dif) >= 1 && Math.abs(dif) > tol) return {...base, st:'bad', et:'no cuadra'};
+  if (Math.abs(dif) >= 1)                        return {...base, st:'warn', et:'diferencia menor'};
+  if (dias > 35) return {...base, st:'warn', et:'conviene reverificar', vieja:true};
+  return {...base, st:'ok', et:'cuadra'};
 }
 
 /* rubros para cargar la diferencia, según de qué lado esté */
@@ -3821,14 +3876,19 @@ function bsaPintar(){
   if (!opciones.includes(BSA.rubro)) BSA.rubro = opciones[0] || null;
 
   let h = `<div class="concil">
-      <div><span>Calculado</span><b class="mono">${montoEn(cur,s)}</b></div>
+      <div><span>Saldo hoy</span><b class="mono">${montoEn(cur,s)}</b></div>
       <div><span>Verificado</span><b class="mono">${
         sem.ver ? montoEn(cur, sem.ver.v) : '—'}</b></div>
       <div class="dif ${falta?'no':'si'}"><span>Diferencia</span><b class="mono">${
         dif==null ? '—' : montoEn(cur, dif)}</b></div>
     </div>
-    <div style="margin-bottom:16px"><span class="sem ${sem.st}"><i></i>${sem.et}</span>
-      ${sem.ver?`<span class="note" style="margin-left:8px">verificado el ${sem.ver.fecha}</span>`:''}</div>
+    <div style="margin-bottom:10px"><span class="sem ${sem.st}"><i></i>${sem.et}</span></div>
+    ${sem.ver ? `<p class="note" style="margin-bottom:16px">Verificado el
+      <b>${sem.ver.fecha}</b>, hace ${sem.dias===0?'menos de un día':sem.dias+' días'}.
+      La diferencia compara contra el saldo de <b>ese día</b>
+      (${montoEn(cur, sem.alDia)}), no contra el de hoy: lo que registraste después
+      ${Math.abs(sem.post)>=1?'—'+montoEn(cur,sem.post)+'— ':''}son cambios legítimos.
+      </p>` : ''}
 
     <div class="lbl" style="margin-bottom:5px">Saldo real ${cur!=='COP'?'(en '+cur+')':''}</div>
     <div class="f" style="margin-bottom:6px">
@@ -3858,9 +3918,9 @@ function bsaPintar(){
         + `</div>
         <div class="plan">Voy a registrar ${gasto?'un gasto':'un ingreso'} de
           <b>${montoEn(cur, Math.abs(dif))}</b> en <b>${BSA.rubro||'—'}</b>, bolsa
-          <b>${nomB(nb)}</b>, con fecha de hoy y la observación
-          «ajuste de conciliación». El saldo calculado va a quedar en
-          <b>${montoEn(cur, sem.ver.v)}</b>.</div>`;
+          <b>${nomB(nb)}</b>, con fecha <b>${sem.ver.fecha}</b> —el día que verificaste—
+          y la observación «ajuste de conciliación». Así el saldo de ese día pasa a ser
+          <b>${montoEn(cur, sem.ver.v)}</b> y lo que registraste después queda intacto.</div>`;
     } else {
       const otras = BOLSAS.filter(b=>b.b!==nb && !esPadre(b.b))
         .sort((a,c)=>nomB(a.b).localeCompare(nomB(c.b),'es'));
@@ -3919,7 +3979,9 @@ async function ajustar(){
   const dif = sem.dif;
   if (dif==null || Math.abs(dif)<1){ toast('No hay diferencia que ajustar', true); return; }
   const abs = Math.abs(dif), gasto = dif>0;
-  const dt = dtLocal(new Date()), f = dt.slice(0,10);
+  /* se fecha el día de la verificación: es donde está el hueco */
+  const f = sem.ver.fecha;
+  const dt = f + 'T12:00';
   const OBS = 'ajuste de conciliación';
 
   if (BSA.modo==='bolsa'){
@@ -3943,9 +4005,8 @@ async function ajustar(){
     MOV.push(m); await DB.put('mov', m);
   }
   bsaPintar(); render(); autoSave();
-  const nuevo = saldoPropio(nb);
-  toast(Math.abs(nuevo - sem.ver.v) < 1
-    ? nomB(nb)+' quedó cuadrado' : 'Ajustado, revisá el saldo');
+  const s2 = semaforo(nb);
+  toast(Math.abs(s2.dif) < 1 ? nomB(nb)+' quedó cuadrado' : 'Ajustado, revisá el saldo');
 }
 
 /* ---------- resumen de conciliación en la pantalla de Saldos ---------- */
@@ -3953,13 +4014,16 @@ function renderConcil(){
   const hojas = BOLSAS.filter(b=>!esPadre(b.b));
   const est = hojas.map(b=>({b:b.b, ...semaforo(b.b)}));
   const mal  = est.filter(x=>x.st==='bad');
-  const tibio= est.filter(x=>x.st==='warn');
+  const tibio= est.filter(x=>x.st==='warn' && !x.vieja);
+  const viejas=est.filter(x=>x.vieja);
   const ok   = est.filter(x=>x.st==='ok');
   const sin  = est.filter(x=>x.st==='gris' && Math.abs(saldoPropio(x.b))>1);
 
-  const g = mal.length ? 'bad' : tibio.length ? 'warn' : ok.length ? 'ok' : 'gris';
+  const g = mal.length ? 'bad' : (tibio.length||viejas.length) ? 'warn'
+          : ok.length ? 'ok' : 'gris';
   const et = mal.length ? mal.length+' no cuadran'
            : tibio.length ? tibio.length+' con diferencia menor'
+           : viejas.length ? viejas.length+' sin reverificar'
            : ok.length ? 'todo cuadra' : 'sin verificar';
   const sm = $$real('#slSem');
   if (sm){ sm.className = 'sem '+g; sm.innerHTML = '<i></i>'+et; }
@@ -3975,6 +4039,10 @@ function renderConcil(){
   let h = '';
   if (mal.length)   h += mal.map(x=>fila(x,'bad')).join('');
   if (tibio.length) h += tibio.map(x=>fila(x,'warn')).join('');
+  if (viejas.length) h += `<p class="note" style="margin:10px 0 0"><b>${viejas.length}</b>
+    ${viejas.length===1?'bolsa lleva':'bolsas llevan'} más de 35 días sin reverificar:
+    ${viejas.slice(0,4).map(x=>nomB(x.b)).join(', ')}${viejas.length>4?'…':''}.
+    Cuadran con la última verificación, pero conviene mirarlas contra el banco.</p>`;
   if (!h){
     h = `<p class="note">${ok.length
       ? '<b>'+ok.length+'</b> bolsas verificadas y cuadradas.'
@@ -4011,7 +4079,7 @@ function render(){
   $('#hTitle').style.display = view==='home' ? 'none' : 'block';
   $('#btnMes').style.display = (view==='home'||view==='cfg'||view==='hist') ? 'none' : 'block';
   $('#hSub').textContent = view==='reg'
-    ? 'Día '+c+' de '+d+' · '+MOV.filter(m=>m.ym===ym).length+' movimientos'
+    ? 'Día '+c+' de '+d+' · '+MOV.filter(m=>vivo(m)&&m.ym===ym).length+' movimientos'
     : Math.round(c/d*100)+'% del mes transcurrido';
   if (!hayDatos()) return;
   if (view==='home'){ armarBolsas(); renderHome(); }
@@ -4065,7 +4133,10 @@ $('#regGrid').onclick = e => {
 };
 $('#regUlt').onclick = async e => {
   const id = e.target.dataset.del; if(!id) return;
-  MOV = MOV.filter(m=>m.id!==id); await DB.del('mov', id);
+  const m = MOV.find(x=>x.id===id);
+  if (!m) return;
+  m.borrado = Date.now();
+  await DB.put('mov', m);          /* la fila queda, con su marca de baja */
   render(); autoSave(); toast('Movimiento borrado');
 };
 $('#pad').onclick = e => {
@@ -4095,7 +4166,7 @@ $('#padSave').onclick = guardar;
 $('#btnCerrarDia').onclick = () => {
   if (!CFG.lifeup){ toast('Activá LifeUp en Ajustes', true); return; }
   life('complete', {task_name: CFG.tarea});
-  life('toast', {text:'Diario al día · '+MOV.filter(m=>m.fecha===todayISO()).length+' registros', type:3});
+  life('toast', {text:'Diario al día · '+MOV.filter(m=>vivo(m)&&m.fecha===todayISO()).length+' registros', type:3});
   toast('Enviado a LifeUp');
 };
 $('#btnAddObj').onclick = addObj;
