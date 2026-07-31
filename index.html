@@ -1543,7 +1543,7 @@ input[type=text],input[type=number],input[type=date],select{
 <div id="toast"></div>
 <script>
 'use strict';
-const VERSION = '2026.07.31-07';   /* subí esto en cada cambio publicado */
+const VERSION = '2026.07.31-08';   /* subí esto en cada cambio publicado */
 /* ===================================================================
    Diario · Presupuesto — PWA local-first
    Los datos viven en IndexedDB en este dispositivo. Nada sale de acá
@@ -2557,7 +2557,7 @@ function preCuadro(p){
   return {filas, prog, total, im,
     intTotal: filas.reduce((s,f)=>s+f.interes,0)};
 }
-const preCuotasPagas = p => FLU.filter(f=>f.actId===p.actId && f.tipo==='cuota').length;
+const preCuotasPagas = p => FLU.filter(f=>f.actId===p.actId && f.tipo==='cuota' && !f.borrado).length;
 const preVivos = () => PRE.filter(p=>!p.borrado);
 const actDeBolsa = nb => ACT.find(a=>a.bolsa===nb || a.n===nb) || null;
 
@@ -2567,7 +2567,7 @@ function preEstado(p){
   const k = preCuotasPagas(p);
   const sig = c.filas[k] || null;
 
-  const cuotasFLU = FLU.filter(f => f.actId === p.actId && f.tipo === 'cuota');
+  const cuotasFLU = FLU.filter(f => f.actId === p.actId && f.tipo === 'cuota' && !f.borrado);
   let capPagadoReal = 0;
   for (const f of cuotasFLU){
     const miMov = MOV.find(m => vivo(m) && m.ref === f.ref && m.r === 'Intereses a favor');
@@ -2991,8 +2991,8 @@ function prEnviarCorreo(p, e){
 }
 
 async function prDeshacer(p){
-  /* Buscar TODAS las cuotas de este préstamo en FLU, ordenadas por fecha */
-  const cuotas = FLU.filter(f => f.actId === p.actId && f.tipo === 'cuota')
+  /* Buscar TODAS las cuotas VIVAS de este préstamo en FLU, ordenadas por fecha */
+  const cuotas = FLU.filter(f => f.actId === p.actId && f.tipo === 'cuota' && !f.borrado)
                      .sort((a,b) => a.fecha<b.fecha ? -1 : a.fecha>b.fecha ? 1 : (a.ts||0)-(b.ts||0));
   if (!cuotas.length){ toast('No hay cuotas pagadas para deshacer', true); return; }
 
@@ -3004,20 +3004,19 @@ async function prDeshacer(p){
     `Cuota #${kLabel} · fecha ${ult.fecha} · monto ${money(ult.monto)}\n\n`+
     `Se borrarán el flujo, la valoración y los movimientos asociados.`)) return;
 
-  /* 1. Borrar el flujo de FLU */
-  await DB.del('flu', ult.id);
-  FLU = FLU.filter(f => f.id !== ult.id);
+  /* 1. Soft-delete del flujo (marca borrado para que la sincronización lo respete) */
+  ult.borrado = Date.now();
+  await DB.put('flu', ult);
 
-  /* 2. Borrar la valoración asociada (por ref, por nota o por fecha+actId) */
-  const valCands = VAL.filter(v => v.actId === p.actId && (
+  /* 2. Soft-delete de la valoración asociada (por ref, por nota o por fecha+actId) */
+  const valCands = VAL.filter(v => !v.borrado && v.actId === p.actId && (
     (ult.ref && v.ref === ult.ref) ||
     (v.nota && v.nota.includes('cuota '+kLabel)) ||
     (v.fecha === ult.fecha)
   ));
-  for (const v of valCands){ await DB.del('val', v.id); }
-  VAL = VAL.filter(v => !valCands.some(x => x.id === v.id));
+  for (const v of valCands){ v.borrado = Date.now(); await DB.put('val', v); }
 
-  /* 3. Marcar los movimientos como borrados (por ref, obs o fecha) */
+  /* 3. Soft-delete de movimientos (por ref, obs o fecha) */
   const movCands = MOV.filter(m => vivo(m) && (
     (ult.ref && m.ref === ult.ref) ||
     (m.obs && m.obs.includes('cuota '+kLabel) && m.obs.includes(p.n)) ||
@@ -3034,7 +3033,7 @@ async function prDeshacer(p){
 
 /* Limpieza masiva: reduce las cuotas pagadas al número real que el usuario indica */
 async function prLimpiarCuotas(p){
-  const cuotas = FLU.filter(f => f.actId === p.actId && f.tipo === 'cuota')
+  const cuotas = FLU.filter(f => f.actId === p.actId && f.tipo === 'cuota' && !f.borrado)
                      .sort((a,b) => a.fecha<b.fecha ? -1 : a.fecha>b.fecha ? 1 : (a.ts||0)-(b.ts||0));
   const total = cuotas.length;
   if (!total){ toast('No hay cuotas', true); return; }
@@ -3052,19 +3051,18 @@ async function prLimpiarCuotas(p){
     `Quedarán ${nReal} cuotas reales.\n\n¿Continuar?`)) return;
 
   for (const fl of sobran){
-    /* Borrar flujo */
-    await DB.del('flu', fl.id);
-    FLU = FLU.filter(f => f.id !== fl.id);
+    /* Soft-delete del flujo */
+    fl.borrado = Date.now();
+    await DB.put('flu', fl);
 
-    /* Borrar valoración */
-    const vals = VAL.filter(v => v.actId === p.actId && (
+    /* Soft-delete de valoraciones */
+    const vals = VAL.filter(v => !v.borrado && v.actId === p.actId && (
       (fl.ref && v.ref === fl.ref) ||
       (v.fecha === fl.fecha && v.nota && v.nota.includes('cuota'))
     ));
-    for (const v of vals){ await DB.del('val', v.id); }
-    VAL = VAL.filter(v => !vals.some(x => x.id === v.id));
+    for (const v of vals){ v.borrado = Date.now(); await DB.put('val', v); }
 
-    /* Borrar movimientos */
+    /* Soft-delete de movimientos */
     const movs = MOV.filter(m => vivo(m) && (
       (fl.ref && m.ref === fl.ref) ||
       (m.fecha === fl.fecha && m.obs && m.obs.includes(p.n))
@@ -4077,8 +4075,13 @@ async function fusionar(data, silencio){
   for (const v of (data.ver||[])) if (!VER[v.b]){ VER[v.b]={v:v.v,fecha:v.fecha}; await DB.put('ver',v); }
   for (const [store, arr, cur] of [['act',data.act,ACT],['flu',data.flu,FLU],
                                    ['val',data.val,VAL],['pen',data.pen,PEN]]){
-    const ids = new Set(cur.map(x=>x.id));
-    for (const x of (arr||[])) if (!ids.has(x.id)){ cur.push(x); await DB.put(store,x); }
+    const ids = new Map(cur.map(x=>[x.id,x]));
+    for (const x of (arr||[])){
+      const mio = ids.get(x.id);
+      if (!mio){ cur.push(x); await DB.put(store,x); }
+      /* si el remoto tiene borrado y el local no, propagar la baja */
+      else if (x.borrado && !mio.borrado){ mio.borrado = x.borrado; await DB.put(store,mio); }
+    }
   }
   /* préstamos: como los objetivos, gana el que se editó más recientemente */
   for (const p of (data.pre||[])){
