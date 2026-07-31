@@ -1487,7 +1487,7 @@ input[type=text],input[type=number],input[type=date],select{
 <div id="toast"></div>
 <script>
 'use strict';
-const VERSION = '2026.07.30-15';   /* subí esto en cada cambio publicado */
+const VERSION = '2026.07.30-16';   /* subí esto en cada cambio publicado */
 /* ===================================================================
    Diario · Presupuesto — PWA local-first
    Los datos viven en IndexedDB en este dispositivo. Nada sale de acá
@@ -2405,13 +2405,15 @@ function padCupo(){
 const AVA_SVG = {
   fiesta: `<svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2.3"
       stroke-linecap="round" stroke-linejoin="round">
-    <path d="M20 19 32 5l12 14"/><path d="M19 19h26"/>
-    <circle cx="32" cy="37" r="15"/>
-    <path d="M17 33h30"/>
-    <rect x="20" y="30" width="10.5" height="8" rx="3" fill="currentColor" stroke="none"/>
-    <rect x="33.5" y="30" width="10.5" height="8" rx="3" fill="currentColor" stroke="none"/>
-    <path d="M25 43c2.5 3.4 11.5 3.4 14 0"/>
-    <path d="M6 28l3.5-1.5M58 28l-3.5-1.5M8 42l3.5 1M56 42l-3.5 1"/>
+    <circle cx="32" cy="37" r="14"/>
+    <path d="M22 24.5 32 10l10 14.5"/>
+    <circle cx="32" cy="8" r="2.6" fill="currentColor" stroke="none"/>
+    <rect x="19" y="31" width="11" height="8.5" rx="3.5" fill="currentColor" stroke="none"/>
+    <rect x="34" y="31" width="11" height="8.5" rx="3.5" fill="currentColor" stroke="none"/>
+    <path d="M30 34.5h4"/>
+    <path d="M19 34.5l-4 1.5M45 34.5l4 1.5"/>
+    <path d="M25.5 44.5c3 3.6 10 3.6 13 0"/>
+    <path d="M7 30l3.5-1.5M57 30l-3.5-1.5M9 45l3.5 1M55 45l-3.5 1"/>
   </svg>`,
   austero: `<svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2.3"
       stroke-linecap="round" stroke-linejoin="round">
@@ -2435,16 +2437,27 @@ const AVA_SVG = {
 };
 const AVA_ET = {fiesta:'Modo fiesta', austero:'Plan austero', casita:'Plan casita'};
 
-/* null = no hay rubro de recreación configurado, y entonces no se muestra */
+/* El avatar mira TODO el ocio, no solo Recreación.
+   Mirar un rubro suelto lo dejaba contradiciendo a la pantalla: el sobre de
+   Recreación tenía $612.694 y salía «modo fiesta», mientras Weekend estaba
+   en -$918.230 y el renglón de abajo decía «hoy no queda cupo». Un monigote
+   festejando encima de una pantalla en rojo no es divertido, es ruido.
+   Ahora usa el neto de los rubros de ocio, que es exactamente la cifra que
+   muestra la tarjeta de abajo: no se pueden contradecir.
+   null = no hay ocio configurado, y entonces no se muestra. */
 function avatar(){
-  const r = S.rubros.find(x=>sinTilde(x.n)==='recreacion');
-  if (!r) return null;
-  const cuota = budget(r.n, ym);
+  const rs = rubrosOcio();
+  if (!rs.length) return null;
+  let saldo = 0, cuota = 0;
+  for (const r of rs){
+    const o = RB[r];
+    let d = o.nat==='Evento' ? sobreDe(r).saldo : estado(r, ym).disp;
+    if (conCandado(r)) d = Math.min(d, cupoOcio(r, ym).puede);
+    saldo += d; cuota += budget(r, ym);
+  }
   if (!cuota) return null;
-  let saldo = r.nat==='Evento' ? sobreDe(r.n).saldo : estado(r.n, ym).disp;
-  if (conCandado(r.n)) saldo = Math.min(saldo, cupoOcio(r.n, ym).puede);
   const k = saldo >= cuota ? 'fiesta' : saldo > 0 ? 'austero' : 'casita';
-  return {k, saldo, cuota, r:r.n, meses: cuota ? saldo/cuota : 0};
+  return {k, saldo, cuota, rs, meses: saldo/cuota};
 }
 
 /* =================== render: pensión =================== */
@@ -4650,7 +4663,8 @@ function renderHome(){
     avEl.className = 'ava '+avat.k;
     $('#hoAvaFig').innerHTML = AVA_SVG[avat.k];
     $('#hoAvaT').textContent = AVA_ET[avat.k];
-    avEl.title = avat.r+': '+money(avat.saldo)+' · cuota '+money(avat.cuota);
+    avEl.title = avat.rs.join(' + ')+': '+money(avat.saldo)
+      + ' de '+money(avat.cuota)+' de cuota mensual';
   }
 
   /* --- cupo de ocio: sábados, domingos y festivos ---
