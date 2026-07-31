@@ -890,6 +890,14 @@ input[type=text],input[type=number],input[type=date],select{
   </div>
 
   <div class="card">
+    <div class="f" style="margin-bottom:10px">
+      <h3 style="flex:1;margin:0">Préstamos</h3>
+      <button class="chipbtn" id="btnPreNuevo">Nuevo / calcular</button>
+    </div>
+    <div id="preList"></div>
+  </div>
+
+  <div class="card">
     <h3>Cartera</h3>
     <div id="aList"></div>
   </div>
@@ -1356,6 +1364,18 @@ input[type=text],input[type=number],input[type=date],select{
   </div>
 </div>
 
+<!-- ============ préstamos: calculadora, cuadro y cuotas ============ -->
+<div id="prst" style="position:fixed;inset:0;z-index:78;background:var(--bg);display:none;
+     flex-direction:column;padding:calc(12px + env(safe-area-inset-top)) var(--pad)
+     calc(14px + env(safe-area-inset-bottom));overflow:auto">
+  <div class="f" style="margin-bottom:16px">
+    <button class="chipbtn" id="prCancel">Cerrar</button>
+    <div style="flex:1;text-align:center;font-weight:600;font-size:14px" id="prTit">Préstamo</div>
+    <button class="chipbtn" id="prDel" style="color:var(--bad)">Borrar</button>
+  </div>
+  <div style="flex:1" id="prBody"></div>
+</div>
+
 <!-- ============ corte mensual de pensión ============ -->
 <div id="pco" style="position:fixed;inset:0;z-index:78;background:var(--bg);display:none;
      flex-direction:column;padding:calc(12px + env(safe-area-inset-top)) var(--pad)
@@ -1487,7 +1507,7 @@ input[type=text],input[type=number],input[type=date],select{
 <div id="toast"></div>
 <script>
 'use strict';
-const VERSION = '2026.07.30-16';   /* subí esto en cada cambio publicado */
+const VERSION = '2026.07.30-17';   /* subí esto en cada cambio publicado */
 /* ===================================================================
    Diario · Presupuesto — PWA local-first
    Los datos viven en IndexedDB en este dispositivo. Nada sale de acá
@@ -1583,7 +1603,7 @@ const DB = (()=>{
   let db=null;
   const open = () => new Promise((res,rej)=>{
     if(db) return res(db);
-    const q = indexedDB.open('diario', 2);
+    const q = indexedDB.open('diario', 3);
     q.onupgradeneeded = e => {
       const d = e.target.result;
       /* Crear solo lo que falte: al subir de versión los almacenes que ya
@@ -1594,6 +1614,7 @@ const DB = (()=>{
       nuevo('cfg','k');  nuevo('fs','k');   nuevo('act','id');
       nuevo('flu','id'); nuevo('val','id'); nuevo('ver','b');
       nuevo('pen','id');          /* cortes de nómina y extractos de pensión */
+      nuevo('pre','id');          /* préstamos con su cuadro de amortización */
     };
     q.onsuccess = e => { db=e.target.result; res(db); };
     q.onerror = () => rej(q.error);
@@ -2460,6 +2481,402 @@ function avatar(){
   return {k, saldo, cuota, rs, meses: saldo/cuota};
 }
 
+/* =================================================================
+   PRÉSTAMOS
+
+   El sistema es el del cuadro del Excel (la plantilla de amortización
+   de Microsoft), verificado contra Prestamo4 y CreditoJF:
+
+     tasa mensual   = tasa anual nominal ÷ 12
+     pago programado = cuota francesa sobre esa tasa
+     pago adicional  = un extra fijo por periodo, que redondea la
+                       cuota total y acorta el plazo
+     interés k       = saldo × tasa mensual
+     capital k       = cuota total − interés (topado al saldo)
+
+   Por eso Préstamo 4 pactado a 36 cuotas se paga en 29, igual que
+   en tu hoja: el pago adicional adelanta capital.
+
+   Un préstamo junta tres piezas que ya existían:
+     · la bolsa (grupo Prestado)  → el saldo por cobrar
+     · el activo (tipo préstamo)  → los flujos y la TIR
+     · el registro PRE            → las condiciones del cuadro
+   ================================================================= */
+function preCuadro(p){
+  const nn = p.nCuotas || p.n;          /* n es el nombre en los guardados */
+  const im = p.tasa/12;
+  const prog = im>0 ? p.monto*im/(1-Math.pow(1+im,-nn)) : p.monto/nn;
+  const total = p.cuota || (prog + (p.extra||0));
+  const filas = [];
+  let saldo = p.monto;
+  for (let k=1; k<=nn*2 && saldo>0.005; k++){
+    const interes = saldo*im;
+    const capital = Math.min(total-interes, saldo);
+    filas.push({k, fecha: sumaMes(p.inicio.slice(0,7), k-1)+p.inicio.slice(7),
+      ini:saldo, interes, capital, pago:capital+interes, fin:saldo-capital});
+    saldo -= capital;
+  }
+  return {filas, prog, total, im,
+    intTotal: filas.reduce((s,f)=>s+f.interes,0)};
+}
+const preCuotasPagas = p => FLU.filter(f=>f.actId===p.actId && f.tipo==='cuota').length;
+const preVivos = () => PRE.filter(p=>!p.borrado);
+const actDeBolsa = nb => ACT.find(a=>a.bolsa===nb || a.n===nb) || null;
+
+/* estado corriente: la fila que sigue y el saldo según el cuadro */
+function preEstado(p){
+  const c = preCuadro(p);
+  const k = preCuotasPagas(p);
+  const sig = c.filas[k] || null;
+  const saldo = k>0 ? (c.filas[k-1]?c.filas[k-1].fin:0) : p.monto;
+  return {c, k, sig, saldo, listo: !sig};
+}
+
+/* el rubro que recoge rendimientos de inversión; se crea si no está */
+async function rubroRend(){
+  const N = 'Rendimientos';
+  if (RB[N]) return N;
+  const r = {n:N, cat:'Ingreso', nat:'Ingreso', pto:0, med6:0, med12:0, cv:null,
+    n12:0, tend:null, a:[0,0,0,0], anual:0, uso:1, bolsa:S.bolsas[0],
+    aviso:'', nuevo:true};
+  S.rubros.unshift(r); RB[N]=r;
+  await DB.put('cfg',{k:'rubrosExtra', v:S.rubros.filter(x=>x.nuevo)});
+  return N;
+}
+
+/* activo enlazado a una bolsa de inversión; se crea si no está */
+async function activoDeBolsa(nb){
+  let a = actDeBolsa(nb);
+  if (a) return a;
+  const tipo = /fondo|renta|vista/i.test(nb) ? 'fondo' : 'accion';
+  a = {id:'b-'+sinTilde(nb).replace(/[^a-z0-9]+/g,'-'), n:nb, tipo, moneda:'COP',
+    estado:'abierto', tasaPactada:null, pct:null, bolsa:nb, hurdle:true,
+    nota:'Creado desde la bolsa "'+nb+'".'};
+  ACT.push(a); await DB.put('act', a);
+  return a;
+}
+
+function renderPre(){
+  const el = $('#preList');
+  const vivos = preVivos();
+  /* activos de préstamo sin cuadro: se ofrecen para armarlo */
+  const sueltos = ACT.filter(a=>a.tipo==='prestamo' && a.estado!=='cerrado'
+    && !vivos.some(p=>p.actId===a.id));
+  let h = vivos.map(p=>{
+    const e = preEstado(p);
+    const pct = Math.min(100, e.k/e.c.filas.length*100);
+    return `<div class="pr ${e.listo?'st-ok':''}" data-pre="${p.id}" style="cursor:pointer">
+      <div class="l1"><div class="nm">${p.n}</div>
+        <div class="vv mono">${e.listo?'pagado':money(e.saldo)}</div></div>
+      <div class="track"><i style="width:${pct}%"></i></div>
+      <div class="l2"><span class="tag">${e.k} de ${e.c.filas.length} cuotas</span>
+        <span class="mono">${e.listo ? 'interés total '+money(e.c.intTotal)
+          : 'sigue '+fCorta(e.sig.fecha)+' · '+money(Math.round(e.sig.pago))}</span></div>
+    </div>`;
+  }).join('');
+  h += sueltos.map(a=>`<div class="pr" data-prearmar="${a.id}" style="cursor:pointer">
+      <div class="l1"><div class="nm">${a.n}</div>
+        <div class="vv"><span class="tag">armar cuadro</span></div></div>
+      <div class="l2"><span class="mono" style="font-size:11px">tiene flujos pero no
+        condiciones: tocá y completá el cuadro</span></div>
+    </div>`).join('');
+  el.innerHTML = h || '<p class="note">Ningún préstamo. Con «Nuevo / calcular» probás '
+    + 'números sin compromiso y guardás solo si querés.</p>';
+}
+
+/* =================== préstamos: la hoja =================== */
+let PRA = {p:null, modo:'ver'};   /* ver | editar */
+
+function preAbrir(id){
+  PRA = {p: id ? PRE.find(x=>x.id===id) : null, modo: id ? 'ver' : 'editar'};
+  $('#prTit').textContent = PRA.p ? PRA.p.n : 'Nuevo préstamo';
+  $('#prDel').style.display = PRA.p ? '' : 'none';
+  prPintar();
+  $('#prst').style.display='flex';
+}
+/* armar el cuadro de un activo que ya existe: se precarga lo que se sabe */
+function preArmar(actId){
+  const a = ACT.find(x=>x.id===actId); if(!a) return;
+  const fs = flujosDe(actId);
+  const ap = fs.find(f=>f.tipo==='aporte');
+  const cuo = fs.filter(f=>f.tipo==='cuota');
+  PRA = {p:null, modo:'editar', pre:{
+    n: a.n, actId,
+    monto: ap ? Math.abs(ap.monto) : 0,
+    tasa: a.tasaPactada || 0,
+    inicio: cuo.length ? cuo[0].fecha : (ap ? ap.fecha : todayISO()),
+    cuota: cuo.length ? Math.abs(cuo[0].monto) : 0,
+    bolsa: BOLSA[a.n] ? a.n
+      : (BOLSAS.find(b=>b.grupo==='Prestado' && a.n.includes(b.b)) || {}).b || null,
+  }};
+  $('#prTit').textContent = a.n;
+  $('#prDel').style.display='none';
+  prPintar();
+  $('#prst').style.display='flex';
+}
+
+function prForm(d){
+  const bolsas = BOLSAS.filter(b=>!esPadre(b.b))
+    .sort((a,b)=>nomB(a.b).localeCompare(nomB(b.b),'es'));
+  const opt = (sel) => '<option value="">— ninguna —</option>' + bolsas.map(b=>
+    `<option value="${b.b}"${b.b===sel?' selected':''}>${nomB(b.b)}</option>`).join('');
+  return `
+    <div class="lbl" style="margin-bottom:5px">Nombre</div>
+    <input type="text" id="prN" value="${d.n||''}" style="max-width:100%;width:100%;margin-bottom:12px">
+    <div class="lbl" style="margin-bottom:5px">Monto prestado</div>
+    <input type="number" id="prMonto" value="${d.monto||''}" step="1000" inputmode="decimal"
+      style="max-width:100%;width:100%;text-align:right;font-size:18px;margin-bottom:12px">
+    <div class="f" style="gap:10px;margin-bottom:12px">
+      <div style="flex:1"><div class="lbl" style="margin-bottom:5px">Tasa anual %</div>
+        <input type="number" id="prTasa" value="${d.tasa?Math.round(d.tasa*10000)/100:''}"
+          step="0.1" inputmode="decimal" style="max-width:100%;width:100%;text-align:right"></div>
+      <div style="flex:1"><div class="lbl" style="margin-bottom:5px">Nº de cuotas</div>
+        <input type="number" id="prNc" value="${d.n_c||''}" step="1" inputmode="numeric"
+          style="max-width:100%;width:100%;text-align:right"></div>
+    </div>
+    <p class="note" style="margin:-6px 0 12px">La tasa es <b>nominal anual</b> — la del
+      cuadro del Excel: el interés del mes es saldo × tasa ÷ 12.</p>
+    <div class="lbl" style="margin-bottom:5px">Cuota total (opcional)</div>
+    <input type="number" id="prCuota" value="${d.cuota||''}" step="1000" inputmode="decimal"
+      style="max-width:100%;width:100%;text-align:right;margin-bottom:4px">
+    <p class="note" style="margin-bottom:12px">Vacía = la cuota francesa exacta. Si ponés una
+      mayor —como tus 1.030.000 o 672.000— el excedente amortiza capital y el
+      préstamo se paga en menos cuotas.</p>
+    <div class="lbl" style="margin-bottom:5px">Fecha de la primera cuota</div>
+    <input type="date" id="prIni" value="${d.inicio||todayISO()}"
+      style="max-width:100%;width:100%;margin-bottom:12px">
+    <div class="lbl" style="margin-bottom:5px">Bolsa del préstamo (saldo por cobrar)</div>
+    <select id="prBolsa" style="max-width:100%;width:100%;margin-bottom:4px">${opt(d.bolsa)}</select>
+    <p class="note" style="margin-bottom:12px">Si la dejás vacía se crea una bolsa nueva en el
+      grupo Prestado con el nombre del préstamo.</p>
+    ${d.actId?'':`<div class="lbl" style="margin-bottom:5px">¿De qué bolsa salió la plata?</div>
+    <select id="prOrigen" style="max-width:100%;width:100%;margin-bottom:4px">${opt(null)}</select>
+    <p class="note" style="margin-bottom:12px">Si la elegís, se registra el traslado del
+      desembolso. Vacía = la plata ya salió y está contabilizada.</p>`}
+    <button class="primary gray" id="prVer" style="margin-bottom:8px">Ver el cuadro</button>
+    <div id="prPrev" style="margin-bottom:8px"></div>
+    <button class="primary" id="prGuardar">Guardar préstamo</button>`;
+}
+
+function prLee(){
+  return {
+    n: $('#prN').value.trim(),
+    monto: +$('#prMonto').value||0,
+    tasa: (+$('#prTasa').value||0)/100,
+    n_c: Math.max(1, Math.round(+$('#prNc').value||0)),
+    cuota: +$('#prCuota').value||0,
+    inicio: $('#prIni').value || todayISO(),
+    bolsa: $('#prBolsa').value || null,
+    origen: $('#prOrigen') && $('#prOrigen').value || null,
+  };
+}
+const prA = d => ({monto:d.monto, tasa:d.tasa, n:d.n_c, cuota:d.cuota||null,
+  extra:0, inicio:d.inicio});
+
+function prTabla(cu, desde){
+  const filas = cu.filas.slice(Math.max(0,(desde||1)-1));
+  return `<table style="font-size:12px"><tr><th>#</th><th>Fecha</th><th>Interés</th>
+    <th>Capital</th><th>Saldo</th></tr>`
+    + filas.map(f=>`<tr><td>${f.k}</td><td>${fCorta(f.fecha)}</td>
+      <td class="mono">${money(Math.round(f.interes))}</td>
+      <td class="mono">${money(Math.round(f.capital))}</td>
+      <td class="mono">${money(Math.round(f.fin))}</td></tr>`).join('')
+    + `</table>`;
+}
+
+function prPintar(){
+  const body = $('#prBody');
+  if (PRA.modo==='editar'){
+    const d = PRA.p ? {...PRA.p, n_c:PRA.p.n} : (PRA.pre ? {...PRA.pre, n_c:PRA.pre.n_c} : {});
+    if (PRA.p){ d.n_c = PRA.p.nCuotas; }
+    body.innerHTML = prForm(d);
+    $('#prVer').onclick = () => {
+      const x = prLee();
+      if (!x.monto || !x.n_c){ toast('Faltan monto o cuotas', true); return; }
+      const cu = preCuadro(prA(x));
+      $('#prPrev').innerHTML = `<div class="card" style="margin-bottom:0">
+        <div class="f"><span class="lbl">Cuota francesa</span>
+          <b class="mono">${money(Math.round(cu.prog))}</b></div>
+        <div class="f"><span class="lbl">Cuota total</span>
+          <b class="mono">${money(Math.round(cu.total))}</b></div>
+        <div class="f"><span class="lbl">Se paga en</span>
+          <b class="mono">${cu.filas.length} cuotas</b></div>
+        <div class="f"><span class="lbl">Interés total</span>
+          <b class="mono">${money(Math.round(cu.intTotal))}</b></div>
+        <div class="hr"></div>${prTabla(cu)}</div>`;
+    };
+    $('#prGuardar').onclick = prGuardar;
+    return;
+  }
+  /* modo ver: estado + cuadro + acciones */
+  const p = PRA.p, e = preEstado(p);
+  const bolsas = BOLSAS.filter(b=>!esPadre(b.b) && b.grupo==='Disponible');
+  body.innerHTML = `
+    <div class="card">
+      <div class="f"><span class="lbl">Saldo por cobrar (cuadro)</span>
+        <b class="mono" style="font-size:18px">${money(Math.round(e.saldo))}</b></div>
+      <div class="f" style="margin-top:4px"><span class="lbl">Cuotas registradas</span>
+        <b class="mono">${e.k} de ${e.c.filas.length}</b></div>
+      ${p.bolsa && BOLSA[p.bolsa] ? `<div class="f" style="margin-top:4px">
+        <span class="lbl">Bolsa «${nomB(p.bolsa)}»</span>
+        <b class="mono">${money(Math.round(saldoPropio(p.bolsa)))}</b></div>`:''}
+      <div class="f" style="margin-top:4px"><span class="lbl">Interés total del plan</span>
+        <b class="mono">${money(Math.round(e.c.intTotal))}</b></div>
+    </div>
+    ${e.listo ? '<div class="warnbox" style="border-color:var(--ok);margin-bottom:8px">Pagado por completo.</div>' : `
+    <div class="card">
+      <h3>Cuota ${e.sig.k} · ${fCorta(e.sig.fecha)}</h3>
+      <div class="f"><span class="lbl">Interés</span><b class="mono">${money(Math.round(e.sig.interes))}</b></div>
+      <div class="f"><span class="lbl">Amortización</span><b class="mono">${money(Math.round(e.sig.capital))}</b></div>
+      <div class="f"><span class="lbl">Total</span><b class="mono" style="font-size:16px">${money(Math.round(e.sig.pago))}</b></div>
+      <div class="lbl" style="margin:12px 0 5px">¿A qué bolsa entró la plata?</div>
+      <select id="prDest" style="max-width:100%;width:100%;margin-bottom:10px">${
+        bolsas.map(b=>`<option value="${b.b}">${nomB(b.b)}</option>`).join('')}</select>
+      <div class="lbl" style="margin-bottom:5px">Fecha real del pago</div>
+      <input type="date" id="prFecha" value="${e.sig.fecha<=todayISO()?e.sig.fecha:todayISO()}"
+        style="max-width:100%;width:100%;margin-bottom:12px">
+      <button class="primary" id="prCuotaOk">Registrar cuota recibida</button>
+      <p class="note" style="margin-top:10px">Genera tres cosas: el <b>interés</b> como
+        ingreso (rubro Intereses a favor), la <b>amortización</b> como traslado desde la
+        bolsa del préstamo, y el <b>flujo</b> en el activo para la TIR.</p>
+    </div>`}
+    <button class="primary gray" id="prCopiar" style="margin-bottom:8px">Copiar estado para el deudor</button>
+    <button class="primary gray" id="prEditar" style="margin-bottom:8px">Editar condiciones</button>
+    <div class="card"><h3>Cuadro completo</h3>${prTabla(e.c)}</div>`;
+  $('#prCopiar').onclick = () => prCopiar(p, e);
+  $('#prEditar').onclick = () => { PRA.modo='editar'; prPintar(); };
+  const ok = $$real('#prCuotaOk');
+  if (ok) ok.onclick = () => prRegistrarCuota(p, e);
+}
+
+async function prGuardar(){
+  const x = prLee();
+  if (!x.n){ toast('Falta el nombre', true); return; }
+  if (!x.monto || !x.n_c || !x.tasa){ toast('Faltan monto, tasa o cuotas', true); return; }
+  const nuevo = !PRA.p;
+  const armar = PRA.pre && PRA.pre.actId;
+
+  /* bolsa del préstamo: la elegida o una nueva en Prestado */
+  let bolsa = x.bolsa;
+  if (!bolsa){
+    bolsa = x.n;
+    if (!BOLSA[bolsa]){
+      const extra = [...(CFG.bolsasExtra||[]),
+        {b:bolsa, tipo:'Prestado', grupo:'Prestado', saldo:0, moneda:'COP'}];
+      await setCfg('bolsasExtra', extra);
+      armarBolsas();
+    }
+  }
+  /* activo: el enlazado, o uno nuevo */
+  let actId = armar ? PRA.pre.actId : (PRA.p ? PRA.p.actId : null);
+  if (!actId){
+    const a = {id:'pre-'+uuid().slice(0,8), n:x.n, tipo:'prestamo', moneda:'COP',
+      estado:'abierto', tasaPactada:x.tasa, pct:null, bolsa, hurdle:true,
+      nota:'Creado desde el módulo de préstamos.'};
+    ACT.push(a); await DB.put('act', a);
+    actId = a.id;
+    const f = {id:uuid(), actId, fecha:x.inicio, tipo:'aporte', monto:-x.monto,
+      nota:'capital colocado', ts:Date.now()};
+    FLU.push(f); await DB.put('flu', f);
+  }
+  const p = {...(PRA.p||{id:uuid()}), n:x.n, actId, bolsa,
+    monto:x.monto, tasa:x.tasa, nCuotas:x.n_c, cuota:x.cuota||null, extra:0,
+    inicio:x.inicio, ts:Date.now()};
+  if (!PRA.p) PRE.push(p); else Object.assign(PRA.p, p);
+  await DB.put('pre', p);
+
+  /* desembolso: traslado origen → bolsa del préstamo */
+  if (nuevo && !armar && x.origen && x.origen!==bolsa){
+    const dt = x.inicio+'T12:00';
+    const m = {id:uuid(), fecha:x.inicio, hora:'12:00', dt, ym:x.inicio.slice(0,7),
+      tipo:'traslado', de:x.origen, a:bolsa, deOrig:x.monto, aOrig:x.monto,
+      valor:x.monto, obs:'desembolso '+x.n, ts:Date.now()};
+    MOV.push(m); await DB.put('mov', m);
+  }
+  PRA = {p, modo:'ver'};
+  $('#prTit').textContent = p.n;
+  $('#prDel').style.display='';
+  prPintar(); render(); autoSave();
+  toast('Préstamo guardado · se paga en '+preCuadro(p).filas.length+' cuotas');
+}
+
+async function prRegistrarCuota(p, e){
+  const dest = $('#prDest').value;
+  const f = $('#prFecha').value || todayISO();
+  if (!dest){ toast('Elegí la bolsa de destino', true); return; }
+  const sig = e.sig;
+  const inte = Math.round(sig.interes), cap = Math.round(sig.capital);
+  const dt = f+'T12:00';
+  /* 1. el interés es ingreso real */
+  const mi = {id:uuid(), fecha:f, hora:'12:00', dt, ym:f.slice(0,7),
+    r:'Intereses a favor', bolsa:dest, moneda:'COP', valorOrig:inte,
+    tasa:1, valor:inte, obs:'interés '+p.n+' · cuota '+sig.k, ts:Date.now()};
+  MOV.push(mi); await DB.put('mov', mi);
+  /* 2. la amortización devuelve capital: traslado préstamo → destino */
+  if (p.bolsa && BOLSA[p.bolsa]){
+    const mt = {id:uuid(), fecha:f, hora:'12:01', dt, ym:f.slice(0,7),
+      tipo:'traslado', de:p.bolsa, a:dest, deOrig:cap, aOrig:cap,
+      valor:cap, obs:'amortización '+p.n+' · cuota '+sig.k, ts:Date.now()};
+    MOV.push(mt); await DB.put('mov', mt);
+  }
+  /* 3. el flujo del activo, para la TIR */
+  const fl = {id:uuid(), actId:p.actId, fecha:f, tipo:'cuota',
+    monto:Math.round(sig.pago), nota:'cuota '+sig.k+' de '+e.c.filas.length, ts:Date.now()};
+  FLU.push(fl); await DB.put('flu', fl);
+  /* la valoración del activo baja al saldo del cuadro */
+  const rec = {id:uuid(), actId:p.actId, fecha:f, valor:Math.round(sig.fin),
+    nota:'saldo según cuadro tras cuota '+sig.k, ts:Date.now()};
+  VAL.push(rec); await DB.put('val', rec);
+  prPintar(); render(); autoSave();
+  toast('Cuota '+sig.k+': '+money(inte)+' de interés + '+money(cap)+' de capital');
+}
+
+function prCopiar(p, e){
+  const txt = [
+    'Préstamo: '+p.n,
+    'Cuotas pagadas: '+e.k+' de '+e.c.filas.length,
+    'Saldo pendiente: '+money(Math.round(e.saldo)),
+    e.sig ? 'Próxima cuota: '+fCorta(e.sig.fecha)+' por '+money(Math.round(e.sig.pago))
+      +' ('+money(Math.round(e.sig.interes))+' interés + '
+      +money(Math.round(e.sig.capital))+' capital)' : 'Pagado por completo',
+  ].join('\n');
+  if (navigator.clipboard && navigator.clipboard.writeText)
+    navigator.clipboard.writeText(txt).then(()=>toast('Copiado'), ()=>prompt('Copiá:', txt));
+  else prompt('Copiá:', txt);
+}
+
+async function prBorrar(){
+  const p = PRA.p; if(!p) return;
+  if (!confirm('¿Borrar el cuadro de «'+p.n+'»? Los movimientos y flujos ya '
+    +'registrados no se tocan.')) return;
+  p.borrado = Date.now(); p.ts = Date.now();
+  await DB.put('pre', p);
+  $('#prst').style.display='none';
+  render(); autoSave(); toast('Cuadro borrado');
+}
+
+/* dividendo que nunca salió del broker: sube la posición y queda anotado
+   en el activo como reinversión — no cuenta como flujo para la TIR */
+async function reinvertir(nb){
+  const cur = (BOLSA[nb]||{}).moneda || 'COP';
+  const v = +(prompt('Monto del dividendo reinvertido en '+nb
+    +(cur!=='COP'?' (en '+cur+')':''), '')||0);
+  if (!v || v<=0) return;
+  const f = prompt('Fecha (AAAA-MM-DD)', todayISO()) || todayISO();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(f)){ toast('Fecha inválida', true); return; }
+  const r = await rubroRend();
+  const m = { id:uuid(), fecha:f, hora:'12:00', dt:f+'T12:00', ym:f.slice(0,7),
+    r, bolsa:nb, moneda:cur, valorOrig:v, tasa:trmDe(cur),
+    valor: Math.round(v*trmDe(cur)), obs:'dividendo reinvertido', ts:Date.now() };
+  MOV.push(m); await DB.put('mov', m);
+  const act = await activoDeBolsa(nb);
+  const fl = {id:uuid(), actId:act.id, fecha:f, tipo:'reinversion',
+    monto: Math.round(v*trmDe(cur)), nota:'no toca tus bolsas', ts:Date.now()};
+  FLU.push(fl); await DB.put('flu', fl);
+  bsaPintar(); render(); autoSave();
+  toast('Reinversión anotada: la posición sube '+montoEn(cur,v));
+}
+
 /* =================== render: pensión =================== */
 function renderPen(){
   const e = penEstado(), pr = penProyeccion(), xs = e.xs;
@@ -2949,7 +3366,7 @@ async function setCfg(k,v){ CFG[k]=v; await DB.put('cfg',{k,v}); }
 function snapshot(){
   return { v:1, app:'diario-presupuesto', exportedAt:new Date().toISOString(),
     mov:MOV, pto:Object.entries(PTO).map(([k,v])=>({k,v,ts:0})), obj:OBJ,
-    act:ACT, flu:FLU, val:VAL, pen:PEN,
+    act:ACT, flu:FLU, val:VAL, pen:PEN, pre:PRE,
     ver:Object.entries(VER).map(([b,x])=>({b,...x})) };
 }
 async function exportar(){
@@ -2986,6 +3403,7 @@ async function importar(d){
     const antes = PEN.length;
     await guardarBase(d, true);
     PEN = await DB.all('pen');
+  PRE = await DB.all('pre');
     const nuevos = PEN.length - antes;
     toast('Base actualizada'
       + (nuevos>0 ? ' · '+nuevos+' registros de pensión cargados' : ''));
@@ -3019,6 +3437,12 @@ async function fusionar(data, silencio){
     const ids = new Set(cur.map(x=>x.id));
     for (const x of (arr||[])) if (!ids.has(x.id)){ cur.push(x); await DB.put(store,x); }
   }
+  /* préstamos: como los objetivos, gana el que se editó más recientemente */
+  for (const p of (data.pre||[])){
+    const cur = PRE.find(x=>x.id===p.id);
+    if (!cur){ PRE.push(p); await DB.put('pre',p); }
+    else if ((p.ts||0) > (cur.ts||0)){ Object.assign(cur,p); await DB.put('pre',cur); }
+  }
   render();
   if (!silencio) toast('Fusionado: '+add+' nuevos'+(bajas?', '+bajas+' de baja':''));
   else if (add||bajas) toast('Del otro dispositivo: '+add+' nuevos'
@@ -3050,6 +3474,7 @@ const STORES = [
   ['act','Activos'],
   ['flu','Flujos de inversión'],
   ['pen','Pensión: cortes y extractos'],
+  ['pre','Préstamos'],
   ['val','Valoraciones'],
   ['cfg','Configuración'],
   ['ver','Saldos verificados'],
@@ -3216,7 +3641,7 @@ function fmtTasas(){
 /* =================================================================
    ACTIVOS — rentabilidad real por TIR de flujos
    ================================================================= */
-let ACT=[], FLU=[], VAL=[], PEN=[];
+let ACT=[], FLU=[], VAL=[], PEN=[], PRE=[];
 
 /* TIR (money-weighted) por bisección. flows: [{f:'YYYY-MM-DD', m:number}]
    Aporte negativo, retorno positivo. Devuelve tasa anual efectiva. */
@@ -3274,6 +3699,7 @@ function metricas(a){
 }
 
 function renderAct(){
+  renderPre();
   const H = CFG.hurdle!=null ? CFG.hurdle : SA.hurdle;
   $('#aHurdle').textContent = (H*100).toFixed(1)+'% anual';
   $('#aHurdleNota').textContent = SA.hurdleNota;
@@ -4827,9 +5253,16 @@ const AJ_GASTO   = ['Costos Bancarios','Intereses','Impuestos Vehículo','Otros'
 const AJ_INGRESO = ['Intereses a favor','Ingreso','Otros'];
 
 let BSA = {b:null, rubro:null, contra:null, modo:'rubro'};
+/* una bolsa de inversión: su saldo se mueve por el mercado, no solo por
+   movimientos. La diferencia al verificar suele ser valorización, no un
+   gasto olvidado — y merece su propio camino. */
+const esInversion = nb => { const i = BOLSA[nb];
+  return !!i && i.grupo==='Ahorro e inversión'
+      && i.tipo!=='Prestado' && i.tipo!=='Deuda' && !hijos(nb).length; };
 
 function abrirBolsa(nb){
-  BSA = {b:nb, rubro:null, contra:(nb==='Caja' ? 'Ahorro$' : null), modo:'rubro'};
+  BSA = {b:nb, rubro:null, contra:(nb==='Caja' ? 'Ahorro$' : null),
+    modo: esInversion(nb) ? 'valor' : 'rubro'};
   $('#bsaTit').textContent = nomB(nb);
   bsaPintar();
   $('#bsa').style.display='flex';
@@ -4871,6 +5304,8 @@ function bsaPintar(){
         text-align:right;font-size:18px" value="${sem.ver ? sem.ver.v : Math.round(s*100)/100}">
     </div>
     <button class="primary gray" id="bsaGuardarVer" style="margin-bottom:6px">Guardar el saldo real</button>
+    ${esInversion(nb)?`<button class="primary gray" id="bsaReinv" style="margin-bottom:6px;
+      font-size:13px;padding:10px">Dividendo reinvertido…</button>`:''}
     <button class="primary gray" id="bsaBorrarVer" style="margin-bottom:18px;font-size:13px;
       padding:10px">Quitar la verificación</button>`;
 
@@ -4883,9 +5318,18 @@ function bsaPintar(){
         : 'El sistema cree que tenés <b>'+montoEn(cur,-dif)+' menos</b> de lo que hay. Falta registrar una entrada.'}</p>
 
       <div class="opts" id="bsaModo">
+        ${esInversion(nb)?`<button data-m="valor" class="${BSA.modo==='valor'?'on':''}">Valorización</button>`:''}
         <button data-m="rubro" class="${BSA.modo==='rubro'?'on':''}">Cargarlo a un rubro</button>
         <button data-m="bolsa" class="${BSA.modo==='bolsa'?'on':''}">⇄ Contra otra bolsa</button>
       </div>`;
+
+    if (BSA.modo==='valor'){
+      h += `<div class="plan">La diferencia es el mercado moviéndose, no un error.
+        Voy a registrar ${gasto?'una <b>desvalorización</b>':'una <b>valorización</b>'} de
+        <b>${montoEn(cur, Math.abs(dif))}</b> en el rubro <b>Rendimientos</b>, con fecha
+        <b>${sem.ver.fecha}</b>, y a guardar <b>${montoEn(cur, sem.ver.v)}</b> como
+        valoración del activo «${nb}» para que la TIR use el precio real.</div>`;
+    } else 
 
     if (BSA.modo==='rubro'){
       h += `<div class="opts" id="bsaRubros">`
@@ -4945,6 +5389,8 @@ function bsaPintar(){
   if (cc) cc.onchange = e => { BSA.contra=e.target.value; bsaPintar(); };
   const aj = $$real('#bsaAjustar');
   if (aj) aj.onclick = ajustar;
+  const rv = $$real('#bsaReinv');
+  if (rv) rv.onclick = () => reinvertir(nb);
 }
 
 async function ajustar(){
@@ -4959,7 +5405,21 @@ async function ajustar(){
   const dt = f + 'T12:00';
   const OBS = 'ajuste de conciliación';
 
-  if (BSA.modo==='bolsa'){
+  if (BSA.modo==='valor'){
+    /* un solo rubro para ambos lados: la pérdida va con monto negativo,
+       que en el balance resta y en el historial se lee como lo que es */
+    const r = await rubroRend();
+    const signed = -dif;                     /* real − app: gana o pierde */
+    const m = { id:uuid(), fecha:f, hora:dt.slice(11,16), dt, ym:f.slice(0,7),
+      r, bolsa:nb, moneda:cur, valorOrig:signed, tasa:trmDe(cur),
+      valor: Math.round(signed*trmDe(cur)), obs:'valorización a mercado', ts:Date.now() };
+    MOV.push(m); await DB.put('mov', m);
+    const act = await activoDeBolsa(nb);
+    const rec = {id:uuid(), actId:act.id, fecha:f,
+      valor: Math.round(sem.ver.v*trmDe(cur)),
+      nota:'valorización desde la bolsa', ts:Date.now()};
+    VAL.push(rec); await DB.put('val', rec);
+  } else if (BSA.modo==='bolsa'){
     const otra = BSA.contra;
     if (!otra){ toast('Elegí la otra bolsa', true); return; }
     const de = gasto ? nb : otra, a = gasto ? otra : nb;
@@ -5226,6 +5686,15 @@ $$('#segAct .seg').forEach(b=>b.onclick = () => {
 });
 
 /* ---------- pensión: botones y listas ---------- */
+$('#btnPreNuevo').onclick = () => preAbrir();
+$('#prCancel').onclick = () => { $('#prst').style.display='none'; render(); };
+$('#prDel').onclick = prBorrar;
+$('#preList').onclick = e => {
+  const a = e.target.closest('[data-pre]');
+  if (a){ preAbrir(a.dataset.pre); return; }
+  const b = e.target.closest('[data-prearmar]');
+  if (b) preArmar(b.dataset.prearmar);
+};
 $('#pnNuevoC').onclick = () => abrirCorte();
 $('#pnNuevoC0').onclick = () => abrirCorte();
 $('#pnNuevoX').onclick = () => abrirExtracto();
