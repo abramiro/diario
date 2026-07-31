@@ -1378,7 +1378,7 @@ input[type=text],input[type=number],input[type=date],select{
 </div>
 
 <!-- ============ dividendo: a dónde fue ============ -->
-<div id="dvd" style="position:fixed;inset:0;z-index:79;background:var(--bg);display:none;
+<div id="dvd" style="position:fixed;inset:0;z-index:81;background:var(--bg);display:none;
      flex-direction:column;padding:calc(12px + env(safe-area-inset-top)) var(--pad)
      calc(14px + env(safe-area-inset-bottom));overflow:auto">
   <div class="f" style="margin-bottom:16px">
@@ -1530,7 +1530,7 @@ input[type=text],input[type=number],input[type=date],select{
 <div id="toast"></div>
 <script>
 'use strict';
-const VERSION = '2026.07.30-21';   /* subí esto en cada cambio publicado */
+const VERSION = '2026.07.30-22';   /* subí esto en cada cambio publicado */
 /* ===================================================================
    Diario · Presupuesto — PWA local-first
    Los datos viven en IndexedDB en este dispositivo. Nada sale de acá
@@ -2754,7 +2754,13 @@ function prPintar(){
   /* modo ver: estado + cuadro + acciones */
   const p = PRA.p, e = preEstado(p);
   const bor = p.estado==='borrador';
-  const bolsas = BOLSAS.filter(b=>!esPadre(b.b) && b.grupo==='Disponible');
+  /* a dónde puede llegar la plata: cualquier bolsa hoja que no sea deuda,
+     con las disponibles primero — antes solo salían las disponibles y
+     parecía que no se podía elegir */
+  const hojas = BOLSAS.filter(b=>!esPadre(b.b) && b.grupo!=='Deuda' && b.tipo!=='Deuda'
+    && b.b!==p.bolsa);
+  const bolsas = [...hojas.filter(b=>b.grupo==='Disponible'),
+                  ...hojas.filter(b=>b.grupo!=='Disponible')];
   body.innerHTML = `
     <div class="card">
       <div class="f"><span class="lbl">Saldo por cobrar (cuadro)</span>
@@ -2782,9 +2788,13 @@ function prPintar(){
       <div class="f"><span class="lbl">Interés</span><b class="mono">${money(Math.round(e.sig.interes))}</b></div>
       <div class="f"><span class="lbl">Amortización</span><b class="mono">${money(Math.round(e.sig.capital))}</b></div>
       <div class="f"><span class="lbl">Total</span><b class="mono" style="font-size:16px">${money(Math.round(e.sig.pago))}</b></div>
+      ${p.bolsa && BOLSA[p.bolsa] ? '' : `<div class="warnbox" style="margin:10px 0">
+        Este préstamo no tiene bolsa enlazada: el interés entrará al destino pero el
+        saldo por cobrar no se descuenta en ninguna bolsa. Tocá «Editar condiciones»
+        y elegí o creá la bolsa del préstamo.</div>`}
       <div class="lbl" style="margin:12px 0 5px">¿A qué bolsa entró la plata?</div>
       <select id="prDest" style="max-width:100%;width:100%;margin-bottom:10px">${
-        bolsas.map(b=>`<option value="${b.b}">${nomB(b.b)}</option>`).join('')}</select>
+        bolsas.map(b=>`<option value="${b.b}">${(b.padre?nomB(b.padre)+' · ':'')+nomB(b.b)}</option>`).join('')}</select>
       <div class="lbl" style="margin-bottom:5px">Fecha real del pago</div>
       <input type="date" id="prFecha" value="${e.sig.fecha<=todayISO()?e.sig.fecha:todayISO()}"
         style="max-width:100%;width:100%;margin-bottom:12px">
@@ -2794,6 +2804,8 @@ function prPintar(){
         hacia la bolsa elegida —el neto sobre el préstamo es la amortización—, y el
         <b>flujo</b> queda en el activo para la TIR.</p>
     </div>`}
+    ${!bor && preCuotasPagas(p)>0 ? `<button class="primary gray" id="prDeshacerBtn"
+      style="margin-bottom:8px;color:var(--warn)">Deshacer la última cuota (${preCuotasPagas(p)})</button>`:''}
     <button class="primary gray" id="prPdfPlan" style="margin-bottom:8px">Plan de pagos en PDF</button>
     ${bor?'':'<button class="primary gray" id="prPdfEdo" style="margin-bottom:8px">Estado de cuenta en PDF</button>'}
     <button class="primary gray" id="prCopiar" style="margin-bottom:8px">Copiar estado para el deudor</button>
@@ -2802,6 +2814,8 @@ function prPintar(){
   $('#prCopiar').onclick = () => prCopiar(p, e);
   $('#prEditar').onclick = () => { PRA.modo='editar'; prPintar(); };
   $('#prPdfPlan').onclick = () => prImprimir(p, 'plan');
+  const dh = $$real('#prDeshacerBtn');
+  if (dh) dh.onclick = () => prDeshacer(p);
   const pe = $$real('#prPdfEdo');
   if (pe) pe.onclick = () => prImprimir(p, 'estado');
   const ej = $$real('#prEjecutarBtn');
@@ -2893,29 +2907,30 @@ async function prRegistrarCuota(p, e){
      (la deuda crece lo que ganó) y la cuota completa SALE del préstamo
      hacia la bolsa de destino. El neto sobre el préstamo es la
      amortización, y el destino recibe lo que de verdad entró. */
+  const ref = 'cuo|'+p.id+'|'+sig.k;
   const hayBolsa = p.bolsa && BOLSA[p.bolsa];
   if (hayBolsa){
-    const mi = {id:uuid(), fecha:f, hora:'12:00', dt, ym:f.slice(0,7),
+    const mi = {id:uuid(), fecha:f, hora:'12:00', dt, ym:f.slice(0,7), ref,
       r:'Intereses a favor', bolsa:p.bolsa, moneda:'COP', valorOrig:inte,
       tasa:1, valor:inte, obs:'interés '+p.n+' · cuota '+sig.k, ts:Date.now()};
     MOV.push(mi); await DB.put('mov', mi);
-    const mt = {id:uuid(), fecha:f, hora:'12:01', dt, ym:f.slice(0,7),
+    const mt = {id:uuid(), fecha:f, hora:'12:01', dt, ym:f.slice(0,7), ref,
       tipo:'traslado', de:p.bolsa, a:dest, deOrig:pago, aOrig:pago,
       valor:pago, obs:'cuota '+sig.k+' '+p.n, ts:Date.now()};
     MOV.push(mt); await DB.put('mov', mt);
   } else {
     /* sin bolsa de préstamo: el interés entra directo al destino */
-    const mi = {id:uuid(), fecha:f, hora:'12:00', dt, ym:f.slice(0,7),
+    const mi = {id:uuid(), fecha:f, hora:'12:00', dt, ym:f.slice(0,7), ref,
       r:'Intereses a favor', bolsa:dest, moneda:'COP', valorOrig:inte,
       tasa:1, valor:inte, obs:'interés '+p.n+' · cuota '+sig.k, ts:Date.now()};
     MOV.push(mi); await DB.put('mov', mi);
   }
   /* 3. el flujo del activo, para la TIR */
-  const fl = {id:uuid(), actId:p.actId, fecha:f, tipo:'cuota',
+  const fl = {id:uuid(), actId:p.actId, fecha:f, tipo:'cuota', ref,
     monto:Math.round(sig.pago), nota:'cuota '+sig.k+' de '+e.c.filas.length, ts:Date.now()};
   FLU.push(fl); await DB.put('flu', fl);
   /* la valoración del activo baja al saldo del cuadro */
-  const rec = {id:uuid(), actId:p.actId, fecha:f, valor:Math.round(sig.fin),
+  const rec = {id:uuid(), actId:p.actId, fecha:f, valor:Math.round(sig.fin), ref,
     nota:'saldo según cuadro tras cuota '+sig.k, ts:Date.now()};
   VAL.push(rec); await DB.put('val', rec);
   prPintar(); render(); autoSave();
@@ -3168,6 +3183,37 @@ function prImprimir(p, tipo){
   if (!win){ toast('El navegador bloqueó la ventana. Permití ventanas emergentes.', true); return; }
   win.document.open(); win.document.write(html); win.document.close();
   toast('En el diálogo de imprimir elegí «Guardar como PDF»');
+}
+
+/* Deshacer la última cuota registrada. Solo la última: deshacer una del
+   medio dejaría el cuadro con huecos. Se buscan las piezas por la
+   referencia; para cuotas viejas —de antes de las referencias— se cae a
+   buscar por la observación. */
+async function prDeshacer(p){
+  const cuo = FLU.filter(f=>f.actId===p.actId && f.tipo==='cuota');
+  if (!cuo.length){ toast('No hay cuotas registradas', true); return; }
+  const k = cuo.length;
+  if (!confirm('¿Deshacer la cuota '+k+' de «'+p.n+'»? Se quitan el flujo, los '
+    +'movimientos y la valoración que generó.')) return;
+  const ult = cuo[cuo.length-1];
+  const ref = ult.ref;
+  /* el flujo */
+  FLU = FLU.filter(x=>x.id!==ult.id); await DB.del('flu', ult.id);
+  /* los movimientos: con referencia, o por observación si son viejos */
+  const esDeCuota = m => (ref && m.ref===ref)
+    || m.obs==='cuota '+k+' '+p.n
+    || m.obs==='interés '+p.n+' · cuota '+k
+    || m.obs==='amortización '+p.n+' · cuota '+k;
+  let bajas = 0;
+  for (const m of MOV) if (!m.borrado && esDeCuota(m)){
+    m.borrado = Date.now(); await DB.put('mov', m); bajas++;
+  }
+  /* la valoración */
+  const val = VAL.filter(v=>v.actId===p.actId &&
+    ((ref && v.ref===ref) || (v.nota||'').includes('tras cuota '+k)));
+  for (const v of val){ VAL = VAL.filter(x=>x.id!==v.id); await DB.del('val', v.id); }
+  prPintar(); render(); autoSave();
+  toast('Cuota '+k+' deshecha · '+bajas+' movimientos dados de baja');
 }
 
 /* =================== render: pensión =================== */
@@ -3945,6 +3991,9 @@ function tir(flows){
   const npv = r => t.reduce((s,x)=>
     s + x.m/Math.pow(1+r, (x.d-d0)/(365*864e5)), 0);
   let lo=-0.95, hi=10;
+  /* un periodo muy corto con ganancia anualiza tasas gigantes: el techo
+     crece hasta encontrar el cruce, en vez de rendirse en 1000% */
+  while (npv(lo)*npv(hi) > 0 && hi < 1e6) hi *= 10;
   if (npv(lo)*npv(hi) > 0) return null;
   for (let i=0;i<200;i++){
     const mid=(lo+hi)/2;
@@ -3960,8 +4009,37 @@ const FLUJO_NOM = {aporte:'Aporte', retiro:'Retiro', dividendo:'Dividendo cobrad
   reinversion:'Dividendo reinvertido', cuota:'Cuota recibida', renta:'Renta',
   gastoActivo:'Gasto del activo'};
 
-const flujosDe = id => FLU.filter(f=>f.actId===id)
-  .sort((a,b)=>a.fecha<b.fecha?-1:1);
+/* Un activo creado desde un bolsillo no tiene flujos propios: su plata
+   entró por traslados del Diario y por el saldo de apertura. Sin flujos
+   no hay TIR. Acá se derivan:
+     · apertura de la bolsa   → aporte en la fecha de corte
+     · traslado hacia la bolsa → aporte
+     · traslado desde la bolsa → retiro
+   Solo para activos nacidos de bolsillos (id «b-…»): los históricos ya
+   traen sus flujos del Excel y derivar encima los duplicaría.  */
+const esActBolsillo = a => a && typeof a.id==='string' && a.id.startsWith('b-') && a.bolsa;
+function flujosDerivados(a){
+  if (!esActBolsillo(a)) return [];
+  const out = [];
+  const b = BOLSA[a.bolsa];
+  if (b && Math.abs(b.saldo)>0.005)
+    out.push({id:null, actId:a.id, fecha:(SS&&SS.corte)||todayISO(), tipo:'aporte',
+      monto:-Math.abs(b.saldo*trmDe(b.moneda||'COP')), nota:'apertura de la bolsa', virtual:true});
+  for (const m of MOV){
+    if (m.borrado || m.tipo!=='traslado') continue;
+    if (m.a===a.bolsa)  out.push({id:null, actId:a.id, fecha:m.fecha, tipo:'aporte',
+      monto:-m.valor, nota:'traslado desde '+nomB(m.de), virtual:true});
+    if (m.de===a.bolsa) out.push({id:null, actId:a.id, fecha:m.fecha, tipo:'retiro',
+      monto:m.valor, nota:'traslado hacia '+nomB(m.a), virtual:true});
+  }
+  return out;
+}
+
+const flujosDe = id => {
+  const a = ACT.find(x=>x.id===id);
+  return [...FLU.filter(f=>f.actId===id), ...flujosDerivados(a)]
+    .sort((x,y)=>x.fecha<y.fecha?-1:1);
+};
 const valDe = id => {
   const a = ACT.find(x=>x.id===id);
   const m = a ? valMercado(a) : null;      /* precio en vivo manda */
@@ -4026,7 +4104,8 @@ function renderAct(){
   const nomA = a => (BOLSA[a.n] && BOLSA[a.n].alias) || a.n;
   $('#aList').innerHTML = filas.map(({a,m})=>{
     let st='ok', tag, right;
-    if (m.tir==null){ st='warn'; tag='sin valorar'; right='—'; }
+    if (m.tir==null){ st='warn';
+      tag = m.val ? 'sin TIR aún' : 'sin valorar'; right='—'; }
     else {
       st = m.tir>=H ? 'ok' : m.tir>=0 ? 'warn' : 'bad';
       tag = m.tir>=H ? 'supera la vara' : m.tir>=0 ? 'por debajo de la vara' : 'pierde';
@@ -4082,7 +4161,7 @@ function detalle(id){
     const col = f.tipo==='reinversion' ? 'var(--acc2)' : f.monto<0?'var(--bad)':'var(--ok)';
     h += `<tr><td>${f.fecha}<div style="font-size:11px;color:var(--tx3)">${FLUJO_NOM[f.tipo]||f.tipo}${f.nota?' · '+f.nota:''}</div></td>
       <td class="mono" style="color:${col}">${money(f.monto)}</td>
-      <td style="width:26px"><button class="chipbtn" data-delf="${f.id}">×</button></td></tr>`;
+      <td style="width:26px">${f.virtual?'':`<button class="chipbtn" data-delf="${f.id}">×</button>`}</td></tr>`;
   }
   h += `</table>${fs.length>40?'<p class="note">Mostrando los 40 más recientes.</p>':''}</div>`;
   $('#detBody').innerHTML = h;
@@ -4755,11 +4834,26 @@ async function nuevoBolsillo(){
   if (!n) return;
   if (BOLSA[n]){ toast('Ya existe una bolsa con ese nombre', true); return; }
   const s = +(prompt('Saldo actual del bolsillo','0')||0);
+  /* si la plata ya estaba en la cuenta madre, crearlo «con saldo» la contaría
+     dos veces: la forma limpia es nacer en cero y llenarse con un traslado */
+  const traslado = s>0 && confirm('¿Esos '+money(s)+' ya estaban en '+nomB(p.b)
+    +'?\n\nAceptar: se registra el traslado desde '+nomB(p.b)+' (recomendado).'
+    +'\nCancelar: el bolsillo nace con ese saldo como plata nueva.');
   const extra = [...(CFG.bolsasExtra||[]),
-    {b:n, tipo:p.tipo||'Electronico', grupo:p.grupo, saldo:s, moneda:p.moneda||'COP', padre:p.b}];
+    {b:n, tipo:p.tipo||'Electronico', grupo:p.grupo, saldo:traslado?0:s,
+     moneda:p.moneda||'COP', padre:p.b}];
   await setCfg('bolsasExtra', extra);
+  armarBolsas();
+  if (traslado){
+    const f = todayISO();
+    const m = {id:uuid(), fecha:f, hora:'12:00', dt:f+'T12:00', ym:f.slice(0,7),
+      tipo:'traslado', de:p.b, a:n, deOrig:s, aOrig:s, valor:s,
+      obs:'apertura del bolsillo '+n, ts:Date.now()};
+    MOV.push(m); await DB.put('mov', m);
+  }
   renderBolsas(); renderSaldos(); autoSave();
-  toast('Bolsillo "'+n+'" creado en '+nomB(p.b));
+  toast('Bolsillo "'+n+'" creado en '+nomB(p.b)
+    + (traslado ? ' · '+money(s)+' trasladados' : ''));
 }
 
 
@@ -4773,10 +4867,13 @@ async function nuevoBolsillo(){
    ================================================================= */
 function abrirMov(){
   armarBolsas();
-  const lista = BOLSAS.filter(b=>!esPadre(b.b))
+  /* también las cuentas madre: su saldo propio es plata real (lo que
+     consignaste al broker y aún no está invertido, por ejemplo) */
+  const lista = BOLSAS
     .sort((a,b)=>nomB(a.b).localeCompare(nomB(b.b),'es'));
   const opts = lista.map(b=>{
-    const et = (b.padre?nomB(b.padre)+' · ':'')+nomB(b.b);
+    const et = (b.padre?nomB(b.padre)+' · ':'')+nomB(b.b)
+      + (esPadre(b.b)?' (cuenta madre)':'');
     return `<option value="${b.b}">${et}</option>`;
   }).join('');
   $('#movDe').innerHTML = opts; $('#movA').innerHTML = opts;
