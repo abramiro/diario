@@ -110,6 +110,9 @@ section.on{display:block;animation:fi .15s ease}
   -webkit-box-orient:vertical;padding:0 2px}
 .htile.over{border-color:var(--bad)}
 .htile.over svg{stroke:var(--bad)}
+.tile-n .cand{font-style:normal;color:var(--acc2);font-size:10px;opacity:.9}
+.tile-bar s{position:absolute;top:-3px;width:2px;height:8px;
+  background:var(--acc2);transform:translateX(-1px)}
 .htile.ocio{border-color:var(--acc2)}
 .htile.ocio svg{stroke:var(--acc2)}
 .htile.acc{background:var(--acc);border-color:var(--acc)}
@@ -1033,7 +1036,23 @@ input[type=text],input[type=number],input[type=date],select{
       <label>URL de esta app</label>
       <input type="text" id="cfUrl" placeholder="se detecta sola">
     </div>
-    <button class="primary gray" id="btnTestLife" style="margin-bottom:8px">Probar conexión</button>
+    <div class="hr"></div>
+    <h3 style="margin:14px 0 4px">Cupo de ocio con monedas</h3>
+    <p class="note" style="margin-bottom:12px">Lo que ganás en LifeUp desbloquea
+      cuánto del presupuesto de ocio podés usar. LifeUp no deja leer tu saldo desde
+      afuera, así que el número lo ponés vos.</p>
+    <div class="f" style="margin-bottom:10px">
+      <label>Monedas que tengo hoy</label>
+      <input type="number" id="cfMonedas" min="0" step="1">
+    </div>
+    <div class="f" style="margin-bottom:10px">
+      <label>Monedas que valen el 100%</label>
+      <input type="number" id="cfMonedasRef" min="0" step="1">
+    </div>
+    <div id="cfMonN" class="note" style="margin-bottom:12px"></div>
+    <button class="primary gray" id="btnCalibrarMon" style="margin-bottom:14px">Calibrar: lo que tengo hoy es el 100%</button>
+    <div class="hr"></div>
+    <button class="primary gray" id="btnTestLife" style="margin:14px 0 8px">Probar conexión</button>
     <button class="primary gray" id="btnTienda" style="margin-bottom:8px">Enviar la tienda a LifeUp</button>
     <button class="primary gray" id="btnDeposito">Depositar la cuota de sobres en el cajero</button>
     <p class="note" style="margin:-6px 0 12px">Es la dirección desde la que abriste la app,
@@ -1186,6 +1205,7 @@ input[type=text],input[type=number],input[type=date],select{
   <div class="amt zero mono" id="padAmt">$0</div>
   <div id="padMedio">
   <div class="lbl mono" id="padConv" style="text-align:right;margin:-4px 0 8px;color:var(--warn);display:none"></div>
+  <div class="lbl" id="padCupo" style="text-align:right;margin:-2px 0 8px;display:none"></div>
   <div class="meta" id="padBolsas"></div>
   <input type="datetime-local" id="padDT" style="display:none;width:100%;max-width:none;
     margin-bottom:10px;background:var(--bg2);border:1px solid var(--acc);border-radius:12px;
@@ -1448,7 +1468,7 @@ input[type=text],input[type=number],input[type=date],select{
 <div id="toast"></div>
 <script>
 'use strict';
-const VERSION = '2026.07.30-11';   /* subí esto en cada cambio publicado */
+const VERSION = '2026.07.30-13';   /* subí esto en cada cambio publicado */
 /* ===================================================================
    Diario · Presupuesto — PWA local-first
    Los datos viven en IndexedDB en este dispositivo. Nada sale de acá
@@ -1482,6 +1502,7 @@ const CFG_DEF = {
   lifeup:false, lifeModo:'tarea', coin:1, tasa:5000, exp:10, skills:'',
   tarea:'Registrar movimiento',
   url:'', neto:0, baseHasta:'2026-07', nombre:'', ocio:'Weekend,Recreación',
+  monedas:0, monedasF:'', monedasRef:0,
   trmEUR:0, trmUSD:0, hurdle:0.168, odClient:''
 };
 
@@ -1655,7 +1676,7 @@ function lifeReward(m){
   if (CFG.lifeModo === 'tarea'){
     /* LifeUp aplica lo que tengas configurado en la tarea: monedas,
        experiencia, ítems y la racha, todo de una */
-    life('complete', {task_name: CFG.tarea || 'Registrar movimiento'});
+    life('complete', {name: CFG.tarea || 'Registrar movimiento'});
   } else if (CFG.lifeModo === 'exp' && CFG.skills.trim()){
     lifeExp(why, CFG.exp||10, CFG.skills.split(',').map(x=>x.trim()).filter(Boolean));
   } else if (CFG.coin > 0){
@@ -1803,6 +1824,7 @@ function openPad(r){
     ? money(e.e)+' de '+money(e.p)+' · quedan '+money(e.disp)
     : 'sin presupuesto asignado';
   $('#padObs').value='';
+  padCupo();
   /* la bolsa manda la moneda: se marca cuál no está en pesos */
   armarBolsas();
   /* orden: primero las más usadas según la historia, luego sus bolsillos */
@@ -1830,6 +1852,7 @@ function openPad(r){
 }
 function closePad(){ $('#pad').classList.remove('on'); }
 function drawAmt(){
+  padCupo();
   const el = $('#padAmt');
   const cur = monedaDe(pad.bolsa);
   const n = +pad.v||0;
@@ -1970,11 +1993,14 @@ function renderReg(){
     const e = estado(r.n, ym);
     const pct = e.p>0 ? Math.min(100, e.e/e.p*100) : 0;
     const cls = e.p===0 ? '' : e.e>e.p ? 'over' : (e.e > e.ritmo + 0.15*e.p ? 'near' : '');
-    const txt = e.p>0 ? money(e.disp) : '—';
+    const c = conCandado(r.n) ? cupoOcio(r.n, ym) : null;
+    const v = c ? c.puede : e.disp;
+    const txt = e.p>0 ? money(v) : '—';
     return `<button class="tile ${cls}" data-r="${r.n}">
-      <span class="tile-n">${r.n}</span>
-      <span class="tile-v mono${e.disp<0?' neg':''}">${txt}</span>
-      <span class="tile-bar"><i style="width:${pct}%"></i></span>
+      <span class="tile-n">${r.n}${c?' <em class="cand">◈</em>':''}</span>
+      <span class="tile-v mono${v<0?' neg':''}">${txt}</span>
+      <span class="tile-bar"><i style="width:${pct}%"></i>${
+        c && c.frac<1 ? `<s style="left:${c.frac*100}%"></s>` : ''}</span>
     </button>`;
   };
 
@@ -2230,6 +2256,114 @@ function penRentabilidad(x, prev){
   return {neta:arma('abonado'), bruta:cs.length?arma('monto'):null,
     dias, aport, cs,
     rend: x.saldo - prev.saldo - (x.apPeriodo!=null ? x.apPeriodo : aport)};
+}
+
+/* =================================================================
+   CUPO DE OCIO PAGADO CON MONEDAS
+
+   El ocio se gana. Las monedas que dan tus hábitos en LifeUp
+   desbloquean cuánto del presupuesto de ocio podés usar este mes.
+
+   La tasa no se escribe a mano: sale de dos números.
+     · monedasRef — las monedas que equivalen al 100%
+     · el presupuesto de ocio del mes
+   Con eso, 1 moneda = presupuesto ÷ monedasRef. Si el presupuesto
+   cambia al recalibrar, la tasa se ajusta sola.
+
+   Dos topes, y el presupuesto es el de arriba:
+     desbloqueado = presupuesto × (monedas ÷ monedasRef), tope 100%
+     podés gastar = desbloqueado − ejecutado
+   Como desbloqueado nunca pasa del presupuesto, tener monedas de
+   sobra no habilita excederse. Ganar el ocio da permiso de gastar
+   lo presupuestado, no de gastar de más.
+
+   LifeUp no deja leer el saldo de monedas desde afuera: su API es
+   de una sola vía. Así que el saldo se escribe en Ajustes, y la app
+   avisa cuando el dato está viejo en vez de fingir que es exacto.
+   ================================================================= */
+const rubrosOcio = () => (CFG.ocio||'').split(',').map(x=>x.trim())
+  .filter(x=>x && RB[x]);
+const ptoOcio = y => rubrosOcio().reduce((s,r)=>s+budget(r,y),0);
+
+/* null = sin calibrar, y entonces nada de esto se muestra */
+function monedas(y){
+  const ref = +CFG.monedasRef||0, mon = +CFG.monedas||0;
+  const pto = ptoOcio(y||ym);
+  if (!ref || !pto) return null;
+  const frac = Math.min(1, Math.max(0, mon/ref));
+  const dias = CFG.monedasF
+    ? Math.round((Date.now()-new Date(CFG.monedasF+'T12:00'))/864e5) : null;
+  return {mon, ref, frac, pto, tasa: pto/ref, pesos: pto*frac,
+    dias, viejo: dias!=null && dias>10,
+    completo: mon>=ref};
+}
+
+/* Cupo de un rubro: el presupuesto manda, las monedas recortan. */
+function cupoOcio(r, y){
+  y = y||ym;
+  const m = monedas(y); if (!m) return null;
+  const p = budget(r,y), e = exec(r,y);
+  const desb = p * m.frac;
+  return {r, p, e, frac:m.frac, desb,
+    disp: p - e,
+    puede: Math.max(0, Math.min(p - e, desb - e)),
+    faltan: Math.max(0, Math.ceil((e - desb)/m.tasa))};   /* monedas para cubrir lo ya gastado */
+}
+const conCandado = r => rubrosOcio().includes(r) && !!monedas(ym);
+
+function renderMon(){
+  const m = monedas(ym), rs = rubrosOcio();
+  if (!rs.length){
+    $('#cfMonN').innerHTML = 'Primero poné al menos un rubro en '
+      + '<b>Rubros de ocio</b>, acá arriba.';
+    return;
+  }
+  if (!m){
+    $('#cfMonN').innerHTML = 'Todavía sin calibrar. Poné tus monedas de hoy y tocá '
+      + '<b>Calibrar</b>: eso fija que ese saldo equivale a todo el presupuesto de '
+      + 'ocio del mes, y de ahí sale la tasa.';
+    return;
+  }
+  const det = rs.map(r=>{
+    const c = cupoOcio(r, ym);
+    return `<div class="f" style="margin-top:4px"><span>${r}</span>
+      <span class="mono">${money(c.puede)} de ${money(c.p)}</span></div>`;
+  }).join('');
+  $('#cfMonN').innerHTML = `
+    <div class="f"><span>Presupuesto de ocio de ${ymLabel(ym)}</span>
+      <b class="mono">${money(m.pto)}</b></div>
+    <div class="f" style="margin-top:4px"><span>1 moneda vale</span>
+      <b class="mono">${money(m.tasa)}</b></div>
+    <div class="f" style="margin-top:4px"><span>${m.mon} de ${m.ref} monedas</span>
+      <b class="mono" style="color:${m.completo?'var(--ok)':'var(--acc2)'}">
+        ${(m.frac*100).toFixed(0)}% desbloqueado</b></div>
+    ${det}
+    ${m.viejo ? `<p class="note" style="color:var(--warn);margin-top:8px">
+       El saldo lo actualizaste hace ${m.dias} días. Ponelo al día para que el
+       cupo signifique algo.</p>` : m.dias!=null && m.dias>0
+       ? `<p class="note" style="margin-top:8px">Actualizado hace ${m.dias}
+          ${m.dias===1?'día':'días'}.</p>` : ''}`;
+}
+
+/* Aviso, no bloqueo: el gasto ya ocurrió y hay que registrarlo igual.
+   La app dice que te pasaste, no te impide contar la verdad. */
+function padCupo(){
+  const c = conCandado(pad.r) ? cupoOcio(pad.r, ym) : null;
+  const el = $('#padCupo');
+  if (!c){ el.style.display='none'; return; }
+  el.style.display='block';
+  const v = +pad.v||0;
+  const m = monedas(ym);
+  if (v > c.puede){
+    const extra = Math.ceil((v - c.puede)/m.tasa);
+    el.style.color = 'var(--warn)';
+    el.innerHTML = `Te pasás del cupo por ${money(v - c.puede)}.`
+      + ` Te faltan ${extra} moneda${extra===1?'':'s'} para cubrirlo.`;
+  } else {
+    el.style.color = 'var(--tx3)';
+    el.innerHTML = `Cupo con monedas ${money(c.puede)}`
+      + ` · ${(c.frac*100).toFixed(0)}% de ${money(c.p)} desbloqueado`;
+  }
 }
 
 /* =================== render: pensión =================== */
@@ -2655,6 +2789,8 @@ function renderCfg(){
   renderCatSel();
   $('#cfLifeup').classList.toggle('on', !!CFG.lifeup);
   $('#cfNombre').value=CFG.nombre||''; $('#cfOcio').value=CFG.ocio||'';
+  $('#cfMonedas').value=CFG.monedas||''; $('#cfMonedasRef').value=CFG.monedasRef||'';
+  renderMon();
   if (!CFG.url) setCfg('url', redirectUri());
   $('#cfModo').value = CFG.lifeModo || 'tarea';
   $('#cfModoN').textContent = MODO_N[CFG.lifeModo||'tarea'];
@@ -4420,6 +4556,7 @@ function renderHome(){
   const libre = diaLibre();
   const ocioR = (CFG.ocio||'').split(',').map(x=>x.trim()).filter(x=>x && RB[x]);
   let ocio = 0;
+  const mon = monedas(ym);
   const ocioDet = ocioR.map(r=>{
     const o = RB[r];
     let d;
@@ -4428,8 +4565,11 @@ function renderHome(){
     } else {
       const e = estado(r, ym); d = e.disp;   /* lo que queda del mes */
     }
+    /* si el ocio se paga con monedas, el cupo se recorta a lo desbloqueado */
+    let cup = null;
+    if (mon){ cup = cupoOcio(r, ym); d = Math.min(d, cup.puede); }
     ocio += Math.max(0, d);
-    return {r, d, sobre:o.nat==='Evento'};
+    return {r, d, sobre:o.nat==='Evento', cup};
   });
 
   $('#hoFinde').style.display = (libre.si && ocioR.length) ? 'block' : 'none';
@@ -4442,7 +4582,9 @@ function renderHome(){
       `${x.r} <b style="color:${x.d<0?'var(--bad)':'var(--tx2)'}">${money(x.d)}</b>`
       + (x.sobre?' <em style="font-style:normal;opacity:.6">del sobre</em>':'')
     ).join(' · ');
-    $('#hoFindeT').innerHTML = `Para hoy podés gastar <b>${money(disp+ocio)}</b>`;
+    $('#hoFindeT').innerHTML = `Para hoy podés gastar <b>${money(disp+ocio)}</b>`
+      + (mon ? `<br><span class="lbl">${mon.mon} monedas · ${(mon.frac*100).toFixed(0)}%
+          del ocio desbloqueado</span>` : '');
   }
 
   const usado = pto? Math.min(100, eje/pto*100) : 0;
@@ -4878,9 +5020,11 @@ $('#padBack').onclick = closePad;
 $('#padSave').onclick = guardar;
 $('#btnCerrarDia').onclick = () => {
   if (!CFG.lifeup){ toast('Activá LifeUp en Ajustes', true); return; }
-  life('complete', {task_name: CFG.tarea});
-  life('toast', {text:'Diario al día · '+MOV.filter(m=>vivo(m)&&m.fecha===todayISO()).length+' registros', type:3});
-  toast('Enviado a LifeUp');
+  const t = (CFG.tarea||'').trim();
+  if (!t){ toast('Poné el nombre de la tarea en Ajustes → LifeUp', true); return; }
+  /* una sola llamada por toque: el aviso se pierde si se encolan las dos */
+  life('complete', {name: t});
+  toast('Enviado a LifeUp: «'+t+'»');
 };
 $('#btnAddObj').onclick = addObj;
 $('#hoRubros').onclick = e => {
@@ -4999,11 +5143,35 @@ $('#cfLifeup').onclick = async () => {
   $('#'+id).onchange = async e => { await setCfg(k, +e.target.value||0); render(); });
 [['cfSkills','skills'],['cfTarea','tarea'],['cfUrl','url'],['cfNombre','nombre'],['cfOcio','ocio']].forEach(([id,k])=>
   $('#'+id).onchange = e => setCfg(k, e.target.value.trim()));
+[['cfMonedas','monedas'],['cfMonedasRef','monedasRef']].forEach(([id,k])=>
+  $('#'+id).onchange = async e => {
+    await setCfg(k, Math.max(0, Math.round(+e.target.value||0)));
+    if (k==='monedas') await setCfg('monedasF', todayISO());
+    render(); autoSave();
+  });
+$('#btnCalibrarMon').onclick = async () => {
+  const mon = Math.max(0, Math.round(+$('#cfMonedas').value||0));
+  if (!mon){ toast('Poné primero cuántas monedas tenés', true); return; }
+  if (!ptoOcio(ym)){ toast('No hay presupuesto de ocio este mes', true); return; }
+  await setCfg('monedas', mon);
+  await setCfg('monedasRef', mon);
+  await setCfg('monedasF', todayISO());
+  render(); autoSave();
+  toast(mon+' monedas = '+money(ptoOcio(ym))+' · 1 moneda vale '+money(ptoOcio(ym)/mon));
+};
 $('#btnTestLife').onclick = () => {
   if (!CFG.lifeup){ toast('Activá la integración primero', true); return; }
+  if (CFG.lifeModo==='tarea'){
+    const t = (CFG.tarea||'').trim();
+    if (!t){ toast('Falta el nombre de la tarea', true); return; }
+    /* ui=true hace que LifeUp muestre la ventana de la tarea: así se ve si
+       existe con ese nombre, que es lo que en realidad hay que comprobar */
+    life('complete', {name:t, ui:true});
+    toast('Buscando «'+t+'» en LifeUp. Si dice que no la encuentra, el nombre no coincide.');
+    return;
+  }
   life('toast',{text:'Diario conectado. Al registrar se '
-    + (CFG.lifeModo==='tarea' ? 'completa la tarea "'+(CFG.tarea||'Registrar movimiento')+'"'
-      : CFG.lifeModo==='exp' ? 'da experiencia' : 'dan '+CFG.coin+' monedas'),
+    + (CFG.lifeModo==='exp' ? 'da experiencia' : 'dan '+CFG.coin+' monedas'),
     type:1, isLong:true});
   toast('Enviado. Si no pasa nada, revisá que LifeUp esté instalado.');
 };
