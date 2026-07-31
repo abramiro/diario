@@ -821,7 +821,8 @@ input[type=text],input[type=number],input[type=date],select{
 <section id="v-act">
   <div class="segrow" id="segAct">
     <button class="seg on" data-av="sal">Saldos</button>
-    <button class="seg" data-av="ren">Rentabilidad</button>
+    <button class="seg" data-av="pre">Préstamos</button>
+    <button class="seg" data-av="ren">Inversiones</button>
     <button class="seg" data-av="pen">Pensión</button>
   </div>
 
@@ -861,7 +862,23 @@ input[type=text],input[type=number],input[type=date],select{
     </div>
   </div>
 
-  <div id="vRen">
+  <!-- ============ MÓDULO CONSOLIDADO DE PRÉSTAMOS ============ -->
+  <div id="vPre" style="display:none">
+    <div class="card" style="background:var(--bg3);border-color:var(--acc)">
+      <div class="f" style="margin-bottom:8px">
+        <h3 style="flex:1;margin:0;color:var(--tx);font-size:15px">Módulo Consolidado de Préstamos</h3>
+        <button class="chipbtn on" id="btnPreNuevo">＋ Nuevo / Simular</button>
+      </div>
+      <p class="note" style="margin-bottom:0">Gestión centralizada de préstamos a terceros, simulaciones en borrador, registro y edición de cuotas, amortización y envío por correo.</p>
+    </div>
+
+    <div class="card">
+      <h3>Tus Préstamos</h3>
+      <div id="preList"></div>
+    </div>
+  </div>
+
+  <div id="vRen" style="display:none">
   <div class="card">
     <div class="f" style="align-items:flex-end">
       <div style="flex:1">
@@ -893,15 +910,7 @@ input[type=text],input[type=number],input[type=date],select{
   </div>
 
   <div class="card">
-    <div class="f" style="margin-bottom:10px">
-      <h3 style="flex:1;margin:0">Préstamos</h3>
-      <button class="chipbtn" id="btnPreNuevo">Nuevo / calcular</button>
-    </div>
-    <div id="preList"></div>
-  </div>
-
-  <div class="card">
-    <h3>Cartera</h3>
+    <h3>Cartera de Inversiones</h3>
     <div id="aList"></div>
   </div>
 
@@ -1533,7 +1542,7 @@ input[type=text],input[type=number],input[type=date],select{
 <div id="toast"></div>
 <script>
 'use strict';
-const VERSION = '2026.07.31-01';   /* subí esto en cada cambio publicado */
+const VERSION = '2026.07.31-02';   /* subí esto en cada cambio publicado */
 /* ===================================================================
    Diario · Presupuesto — PWA local-first
    Los datos viven en IndexedDB en este dispositivo. Nada sale de acá
@@ -4879,7 +4888,9 @@ function renderBolsasJerarquia(filas, tot){
   $('#slList').innerHTML = GRUPOS.map(g=>{
     const sub = filas.filter(x=>x.grupo===g).sort((a,b)=>b.cop-a.cop);
     if (!sub.length) return '';
+    const btnIr = g==='Prestado' ? `<div style="padding:6px 14px 2px"><button class="chipbtn on" style="font-size:12px;padding:4px 10px" onclick="$$('#segAct .seg[data-av=\\'pre\\']')[0].click()">Ir al Módulo de Préstamos →</button></div>` : '';
     return `<div class="sl-g">${g}<span class="mono">${money(tot(g))}</span></div>`
+      + btnIr
       + sub.map(x=>fila(x,false)).join('');
   }).join('');
 }
@@ -6264,10 +6275,12 @@ $$('#segAct .seg').forEach(b=>b.onclick = () => {
   $$('#segAct .seg').forEach(x=>x.classList.toggle('on', x===b));
   const v = b.dataset.av;
   $('#vSal').style.display = v==='sal' ? 'block' : 'none';
+  $('#vPre').style.display = v==='pre' ? 'block' : 'none';
   $('#vRen').style.display = v==='ren' ? 'block' : 'none';
   $('#vPen').style.display = v==='pen' ? 'block' : 'none';
-  $('#aComo').style.display = v==='pen' ? 'none' : 'block';
+  $('#aComo').style.display = (v==='pen' || v==='pre') ? 'none' : 'block';
   if (v==='pen') renderPen();
+  if (v==='pre') renderPre();
 });
 
 /* ---------- pensión: botones y listas ---------- */
