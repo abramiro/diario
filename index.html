@@ -1543,7 +1543,7 @@ input[type=text],input[type=number],input[type=date],select{
 <div id="toast"></div>
 <script>
 'use strict';
-const VERSION = '2026.07.31-04';   /* subí esto en cada cambio publicado */
+const VERSION = '2026.07.31-05';   /* subí esto en cada cambio publicado */
 /* ===================================================================
    Diario · Presupuesto — PWA local-first
    Los datos viven en IndexedDB en este dispositivo. Nada sale de acá
@@ -2975,14 +2975,56 @@ function prEnviarCorreo(p, e){
   window.open(`mailto:?subject=${asunto}&body=${cuerpo}`, '_blank');
 }
 
+async function prDeshacer(p){
+  const k = preCuotasPagas(p);
+  if (k <= 0){ toast('No hay cuotas pagadas para deshacer', true); return; }
+  
+  if (!confirm(`¿Eliminar la última cuota (cuota ${k}) del préstamo "${p.n}"?\n\nSe eliminarán sus flujos y movimientos asociados.`)) return;
+
+  const e = preCuadro(p);
+  const ref = 'cuo|' + p.id + '|' + k;
+
+  /* 1. Eliminar flujos en FLU */
+  const fls = FLU.filter(f => f.actId === p.actId && (f.ref === ref || f.nota === 'cuota '+k+' de '+e.filas.length));
+  for (const f of fls){
+    await DB.del('flu', f.id);
+  }
+  FLU = FLU.filter(f => !fls.some(x => x.id === f.id));
+
+  /* 2. Eliminar valoraciones en VAL */
+  const vals = VAL.filter(v => v.actId === p.actId && (v.ref === ref || (v.nota && v.nota.includes('cuota '+k))));
+  for (const v of vals){
+    await DB.del('val', v.id);
+  }
+  VAL = VAL.filter(v => !vals.some(x => x.id === v.id));
+
+  /* 3. Marcar movimientos como borrados en MOV */
+  const movs = MOV.filter(m => vivo(m) && (m.ref === ref || (m.obs && m.obs.includes('cuota '+k))));
+  for (const m of movs){
+    m.borrado = Date.now();
+    await DB.put('mov', m);
+  }
+
+  p.ts = Date.now();
+  await DB.put('pre', p);
+  if (PRA && PRA.p && PRA.p.id === p.id) PRA.p = p;
+
+  prPintar();
+  render();
+  autoSave();
+  toast(`Cuota ${k} eliminada del préstamo`);
+}
+
 async function prEditarCuota(pId, kNum){
   const p = typeof pId === 'string' ? PRE.find(x => x.id === pId) : pId;
   if (!p){ toast('No se encontró el préstamo', true); return; }
 
   const e = preCuadro(p);
+  const filas = e.filas || [];
+  const fTheo = filas[kNum - 1] || null;
   const ref = 'cuo|'+p.id+'|'+kNum;
   
-  let fl = FLU.find(f => f.actId === p.actId && (f.ref === ref || f.nota === 'cuota '+kNum+' de '+e.filas.length));
+  let fl = FLU.find(f => f.actId === p.actId && (f.ref === ref || f.nota === 'cuota '+kNum+' de '+filas.length));
   if (!fl){
     const cuotas = FLU.filter(f => f.actId === p.actId && f.tipo === 'cuota').sort((a,b) => a.fecha<b.fecha?-1:1);
     fl = cuotas[kNum - 1];
@@ -2991,18 +3033,18 @@ async function prEditarCuota(pId, kNum){
   let movs = MOV.filter(m => vivo(m) && (m.ref === ref || (m.obs && m.obs.includes('cuota '+kNum))));
   let val = VAL.find(v => v.actId === p.actId && (v.ref === ref || (v.nota && v.nota.includes('cuota '+kNum))));
 
-  const fActual = fl ? fl.fecha : (e.filas[kNum-1] ? e.filas[kNum-1].fecha : todayISO());
+  const fActual = fl ? fl.fecha : (fTheo ? fTheo.fecha : todayISO());
   const fNue = prompt(`Editar Cuota ${kNum} de ${p.n}\n\nNueva fecha del pago (AAAA-MM-DD):`, fActual);
   if (fNue===null) return;
   if (!/^\d{4}-\d{2}-\d{2}$/.test(fNue)){ toast('Fecha inválida', true); return; }
 
-  const mActual = fl ? fl.monto : (e.filas[kNum-1] ? Math.round(e.filas[kNum-1].pago) : 0);
-  const mNue = prompt(`Monto TOTAL de la cuota pagada ($):`, mActual);
+  const mActual = fl ? fl.monto : (fTheo ? Math.round(fTheo.pago) : 0);
+  const mNue = prompt(`Nuevo valor TOTAL de la cuota pagada ($):`, mActual);
   if (mNue===null) return;
   const mVal = +mNue || 0;
 
   const miMov = movs.find(m => m.r === 'Intereses a favor');
-  const inteActual = miMov ? miMov.valor : (e.filas[kNum-1] ? Math.round(e.filas[kNum-1].interes) : 0);
+  const inteActual = miMov ? miMov.valor : (fTheo ? Math.round(fTheo.interes) : 0);
   const inteNue = prompt(`Monto abonado a INTERESES ($):`, inteActual);
   if (inteNue===null) return;
   const inteVal = +inteNue || 0;
@@ -3028,7 +3070,7 @@ async function prEditarCuota(pId, kNum){
 
   p.ts = Date.now();
   await DB.put('pre', p);
-  PRA.p = p;
+  if (PRA && PRA.p && PRA.p.id === p.id) PRA.p = p;
 
   prPintar();
   render();
@@ -3045,6 +3087,24 @@ async function editarMov(mInput){
     const pId = parts[1], kNum = +parts[2];
     const p = PRE.find(x => x.id === pId);
     if (p){ prEditarCuota(p, kNum); return; }
+  }
+
+  const opc = prompt(
+    `Movimiento: ${m.r || 'Traslado'} (${money(m.valor)})\n` +
+    `1 = Modificar datos (monto, fecha, rubro, bolsa, nota)\n` +
+    `2 = Borrar este movimiento\n\n` +
+    `Escribe 1 o 2:`, '1'
+  );
+
+  if (opc === null) return;
+
+  if (opc.trim() === '2'){
+    if (!confirm(`¿Seguro que deseas borrar el movimiento "${m.r || 'Traslado'}" por ${money(m.valor)}?`)) return;
+    m.borrado = Date.now();
+    await DB.put('mov', m);
+    render(); autoSave();
+    toast('Movimiento borrado');
+    return;
   }
 
   const fNue = prompt('Fecha del movimiento (AAAA-MM-DD)', m.fecha);
@@ -3091,7 +3151,7 @@ async function editarMov(mInput){
 
   await DB.put('mov', m);
   render(); autoSave();
-  toast('Movimiento actualizado');
+  toast('Movimiento actualizado correctamente');
 }
 
 async function limpiarDuplicadosTrii(){
