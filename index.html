@@ -1543,7 +1543,7 @@ input[type=text],input[type=number],input[type=date],select{
 <div id="toast"></div>
 <script>
 'use strict';
-const VERSION = '2026.07.31-05';   /* subí esto en cada cambio publicado */
+const VERSION = '2026.07.31-06';   /* subí esto en cada cambio publicado */
 /* ===================================================================
    Diario · Presupuesto — PWA local-first
    Los datos viven en IndexedDB en este dispositivo. Nada sale de acá
@@ -2566,7 +2566,16 @@ function preEstado(p){
   const c = preCuadro(p);
   const k = preCuotasPagas(p);
   const sig = c.filas[k] || null;
-  const saldo = k>0 ? (c.filas[k-1]?c.filas[k-1].fin:0) : p.monto;
+
+  const cuotasFLU = FLU.filter(f => f.actId === p.actId && f.tipo === 'cuota');
+  let capPagadoReal = 0;
+  for (const f of cuotasFLU){
+    const miMov = MOV.find(m => vivo(m) && m.ref === f.ref && m.r === 'Intereses a favor');
+    const inte = miMov ? miMov.valor : 0;
+    capPagadoReal += Math.max(0, f.monto - inte);
+  }
+
+  const saldo = k > 0 ? Math.max(0, p.monto - (capPagadoReal || (c.filas[k-1]? (p.monto - c.filas[k-1].fin) : 0))) : p.monto;
   return {c, k, sig, saldo, listo: !sig};
 }
 
@@ -2819,10 +2828,12 @@ function prPintar(){
       ${(()=> {
         let rows = '';
         const nPagas = preCuotasPagas(p);
+        const cuotasPagasList = FLU.filter(f => f.actId === p.actId && f.tipo === 'cuota').sort((a,b) => a.fecha<b.fecha?-1:1);
         for (let i=1; i<=nPagas; i++){
           const fTheo = e.c.filas[i-1];
           const ref = 'cuo|' + p.id + '|' + i;
-          const flReal = FLU.find(fl => fl.actId === p.actId && (fl.ref === ref || fl.nota === 'cuota '+i+' de '+e.c.filas.length));
+          let flReal = FLU.find(fl => fl.actId === p.actId && (fl.ref === ref || fl.nota === 'cuota '+i+' de '+e.c.filas.length));
+          if (!flReal && cuotasPagasList[i-1]) flReal = cuotasPagasList[i-1];
           const fFecha = flReal ? flReal.fecha : (fTheo ? fTheo.fecha : '');
           const fMonto = flReal ? flReal.monto : (fTheo ? Math.round(fTheo.pago) : 0);
           rows += `<div class="f" style="margin-bottom:6px;font-size:12.5px">
