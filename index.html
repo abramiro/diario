@@ -57,53 +57,68 @@ section.on{display:block;animation:fi .15s ease}
 
 /* ================= INICIO ================= */
 #v-home{padding-bottom:6px}
-.hsaludo{padding:6px 2px 18px}
+.hsaludo{padding:4px 2px 12px}
 .hsaludo .d{font-size:12px;color:var(--tx3);text-transform:capitalize;letter-spacing:.02em}
-.hsaludo .s{font-size:23px;font-weight:660;letter-spacing:-.025em;margin-top:3px}
+.hsaludo .s{font-size:20px;font-weight:660;letter-spacing:-.025em;margin-top:2px}
 
 .hero2{position:relative;overflow:hidden;background:var(--bg2);
-  border:1px solid var(--line);border-radius:18px;padding:20px;margin-bottom:18px}
+  border:1px solid var(--line);border-radius:18px;padding:17px 18px;margin-bottom:14px}
 .hero2::after{content:'';position:absolute;right:-70px;top:-70px;width:190px;height:190px;
   border-radius:50%;background:var(--acc);opacity:.07}
 .hero2 .k{font-size:11px;color:var(--tx3);text-transform:uppercase;letter-spacing:.1em;
-  font-weight:600}
-.hero2 .n{font-size:40px;font-weight:690;letter-spacing:-.035em;line-height:1.05;margin:8px 0 2px;
+  font-weight:600;padding-right:76px}
+/* El avatar vive en la esquina, encima del círculo decorativo. Las dos
+   primeras líneas de texto le dejan sitio para que nunca se pisen. */
+.hero2 .ava{position:absolute;top:14px;right:14px;width:70px;z-index:2;text-align:center}
+.hero2 .ava .fig{height:56px}
+.hero2 .ava svg{width:56px;height:56px;display:block;margin:0 auto}
+.hero2 .ava .et{font-size:9.5px;font-weight:700;letter-spacing:.06em;
+  text-transform:uppercase;margin-top:2px;line-height:1.2}
+.hero2 .ava.fiesta{color:var(--acc2)}
+.hero2 .ava.austero{color:var(--warn)}
+.hero2 .ava.casita{color:var(--ok)}
+.hero2 .ava .et{color:currentColor}
+@media(max-width:340px){ .hero2 .ava{width:56px} .hero2 .ava svg{width:46px;height:46px}
+  .hero2 .ava .fig{height:46px} .hero2 .k{padding-right:62px} }
+.hero2 .n{font-size:36px;font-weight:690;letter-spacing:-.035em;line-height:1.05;margin:6px 0 2px;
   font-variant-numeric:tabular-nums}
-.hero2 .c{font-size:13px;color:var(--tx2)}
-.hero2 .pd{font-size:13px;color:var(--tx3);margin-top:9px;
-  padding-top:9px;border-top:1px solid var(--line)}
+.hero2 .c{font-size:13px;color:var(--tx2);padding-right:76px}
+.hero2 .pd{font-size:12.5px;color:var(--tx3);margin-top:8px;
+  padding-top:8px;border-top:1px solid var(--line)}
 .hero2 .pd b{color:var(--tx2);font-weight:650;font-variant-numeric:tabular-nums}
-.finde{margin-top:14px;padding:13px 14px;border-radius:13px;
-  background:var(--bg3);border:1px solid var(--line2);position:relative;z-index:1}
+.finde{margin-top:10px;padding:9px 12px;border-radius:12px;
+  background:var(--bg3);border:1px solid var(--line2);position:relative;z-index:1;
+  display:grid;grid-template-columns:1fr auto;column-gap:10px;align-items:baseline}
+.finde .et{grid-column:1}
 .finde .et span{display:inline-block;background:var(--acc2);color:#fff;
-  font-size:10px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;
-  padding:3px 9px;border-radius:999px}
-.finde .n{font-size:24px;font-weight:670;letter-spacing:-.02em;margin:9px 0 2px;
-  font-variant-numeric:tabular-nums}
-.finde .de{font-size:11.5px;color:var(--tx3)}
-.finde .tt{font-size:12.5px;color:var(--tx2);margin-top:9px;padding-top:9px;
-  border-top:1px solid var(--line)}
+  font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+  padding:2px 7px;border-radius:999px}
+/* el monto sube a la línea de la etiqueta: una fila menos de alto */
+.finde .n{grid-column:2;grid-row:1;font-size:19px;font-weight:670;letter-spacing:-.02em;
+  margin:0;font-variant-numeric:tabular-nums;text-align:right}
+.finde .de{grid-column:1/-1;font-size:11px;color:var(--tx3);margin-top:4px}
+.finde .tt{grid-column:1/-1;font-size:12px;color:var(--tx2);margin-top:6px}
 .finde .tt b{font-weight:660;color:var(--tx);font-variant-numeric:tabular-nums}
-.hero2 .track{height:5px;background:var(--bg3);border-radius:3px;margin-top:16px;
+.hero2 .track{height:5px;background:var(--bg3);border-radius:3px;margin-top:10px;
   position:relative;overflow:hidden}
 .hero2 .track i{position:absolute;inset:0 auto 0 0;background:var(--acc);border-radius:3px;
   transition:width .5s ease}
 .hero2 .track s{position:absolute;top:-2px;bottom:-2px;width:2px;background:var(--tx);opacity:.45}
-.hero2 .l{display:flex;justify-content:space-between;font-size:11px;color:var(--tx3);margin-top:7px}
+.hero2 .l{display:flex;justify-content:space-between;font-size:11px;color:var(--tx3);margin-top:5px}
 
 .hsec{font-size:11px;color:var(--tx3);text-transform:uppercase;letter-spacing:.1em;
-  font-weight:650;margin:22px 2px 11px;display:flex;align-items:baseline}
+  font-weight:650;margin:16px 2px 9px;display:flex;align-items:baseline}
 .hsec a{margin-left:auto;text-transform:none;letter-spacing:0;font-size:12px;
   color:var(--acc);text-decoration:none;font-weight:550}
 
 .hgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
 @media(min-width:520px){.hgrid{grid-template-columns:repeat(6,1fr)}}
-.htile{background:var(--bg2);border:1px solid var(--line);border-radius:16px;
-  padding:14px 6px 11px;display:flex;flex-direction:column;align-items:center;gap:9px;
-  transition:transform .12s,border-color .12s,background .12s;min-height:88px;
+.htile{background:var(--bg2);border:1px solid var(--line);border-radius:15px;
+  padding:11px 5px 9px;display:flex;flex-direction:column;align-items:center;gap:7px;
+  transition:transform .12s,border-color .12s,background .12s;min-height:74px;
   justify-content:center}
 .htile:active{transform:scale(.94);background:var(--bg3)}
-.htile svg{width:26px;height:26px;stroke:var(--tx2);fill:none;stroke-width:1.6;
+.htile svg{width:23px;height:23px;stroke:var(--tx2);fill:none;stroke-width:1.6;
   stroke-linecap:round;stroke-linejoin:round}
 .htile .e{font-size:11px;font-weight:560;text-align:center;line-height:1.25;
   color:var(--tx2);overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;
@@ -558,6 +573,10 @@ input[type=text],input[type=number],input[type=date],select{
   </div>
 
   <div class="hero2" id="hoHero">
+    <div class="ava" id="hoAva" style="display:none">
+      <div class="fig" id="hoAvaFig"></div>
+      <div class="et" id="hoAvaT"></div>
+    </div>
     <div class="k" id="hoHeroK">Gasto de bolsillo disponible</div>
     <div class="n mono" id="hoHeroN">—</div>
     <div class="c" id="hoHeroC">—</div>
@@ -1468,7 +1487,7 @@ input[type=text],input[type=number],input[type=date],select{
 <div id="toast"></div>
 <script>
 'use strict';
-const VERSION = '2026.07.30-13';   /* subí esto en cada cambio publicado */
+const VERSION = '2026.07.30-15';   /* subí esto en cada cambio publicado */
 /* ===================================================================
    Diario · Presupuesto — PWA local-first
    Los datos viven en IndexedDB en este dispositivo. Nada sale de acá
@@ -1961,13 +1980,15 @@ function renderChips(){
 function renderReg(){
   const hab = rubrosDe('Hábito');
   let disp=0, rest=0;
-  for (const r of hab){ const e=estado(r,ym); disp+=Math.max(0,e.disp); rest=e.rest; }
+  for (const r of hab){ const e=estado(r,ym); disp+=e.disp; rest=e.rest; }
   const porDia = rest>0 ? disp/rest : disp;
-  $('#regDisp').textContent = money(porDia);
-  $('#regDisp').style.color = porDia<=0 ? 'var(--bad)' : 'var(--tx)';
-  $('#regDispC').textContent = rest>0
-    ? `por día en hábitos · quedan ${rest} días de ${daysIn(ym)}`
-    : 'disponible en hábitos';
+  $('#regDisp').textContent = money(disp<0 ? disp : porDia);
+  $('#regDisp').style.color = disp<=0 ? 'var(--bad)' : 'var(--tx)';
+  $('#regDispC').textContent = disp<0
+    ? `excedido en hábitos · quedan ${rest} ${rest===1?'día':'días'} de ${daysIn(ym)}`
+    : rest>0
+      ? `por día en hábitos · quedan ${rest} días de ${daysIn(ym)}`
+      : 'disponible en hábitos';
 
   const hoy = todayISO();
   const dia = MOV.filter(m=>vivo(m) && m.fecha===hoy && m.tipo!=='traslado');
@@ -2364,6 +2385,66 @@ function padCupo(){
     el.innerHTML = `Cupo con monedas ${money(c.puede)}`
       + ` · ${(c.frac*100).toFixed(0)}% de ${money(c.p)} desbloqueado`;
   }
+}
+
+/* =================================================================
+   EL AVATAR DE RECREACIÓN
+
+   Un vistazo antes de leer un solo número: cómo viene el plan.
+   Se mide contra la cuota mensual de Recreación, no contra un monto
+   fijo, así sigue teniendo sentido si recalibrás el presupuesto.
+
+     saldo >= una cuota  →  fiesta
+     saldo  > 0          →  austero
+     saldo <= 0          →  casita
+
+   Recreación es un Evento, así que el saldo sale del sobre en su
+   vigencia, que es la misma vara que usa el resto de la app. Si el
+   cupo con monedas está encendido, manda el menor de los dos.
+   ================================================================= */
+const AVA_SVG = {
+  fiesta: `<svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2.3"
+      stroke-linecap="round" stroke-linejoin="round">
+    <path d="M20 19 32 5l12 14"/><path d="M19 19h26"/>
+    <circle cx="32" cy="37" r="15"/>
+    <path d="M17 33h30"/>
+    <rect x="20" y="30" width="10.5" height="8" rx="3" fill="currentColor" stroke="none"/>
+    <rect x="33.5" y="30" width="10.5" height="8" rx="3" fill="currentColor" stroke="none"/>
+    <path d="M25 43c2.5 3.4 11.5 3.4 14 0"/>
+    <path d="M6 28l3.5-1.5M58 28l-3.5-1.5M8 42l3.5 1M56 42l-3.5 1"/>
+  </svg>`,
+  austero: `<svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2.3"
+      stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="32" cy="26" r="14"/>
+    <path d="M26 23h.01M38 23h.01"/>
+    <path d="M27 32h10"/>
+    <path d="M19 47h16v8a5 5 0 0 1-5 5h-6a5 5 0 0 1-5-5z"/>
+    <path d="M35 49h3.5a3.5 3.5 0 0 1 0 7H35"/>
+    <path d="M24 43c0-2.5 2.5-2.5 2.5-5M30 43c0-2.5 2.5-2.5 2.5-5"/>
+  </svg>`,
+  casita: `<svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2.3"
+      stroke-linecap="round" stroke-linejoin="round">
+    <path d="M45 15h6v9"/>
+    <path d="M48 11c0-3 3-3 3-6M54 11c0-3 3-3 3-6"/>
+    <path d="M5 31 32 9l27 22"/>
+    <path d="M12 28v27h40V28"/>
+    <circle cx="32" cy="40" r="10"/>
+    <path d="M28.5 37.5h.01M35.5 37.5h.01"/>
+    <path d="M28 43.5c2.2 2.5 5.8 2.5 8 0"/>
+  </svg>`
+};
+const AVA_ET = {fiesta:'Modo fiesta', austero:'Plan austero', casita:'Plan casita'};
+
+/* null = no hay rubro de recreación configurado, y entonces no se muestra */
+function avatar(){
+  const r = S.rubros.find(x=>sinTilde(x.n)==='recreacion');
+  if (!r) return null;
+  const cuota = budget(r.n, ym);
+  if (!cuota) return null;
+  let saldo = r.nat==='Evento' ? sobreDe(r.n).saldo : estado(r.n, ym).disp;
+  if (conCandado(r.n)) saldo = Math.min(saldo, cupoOcio(r.n, ym).puede);
+  const k = saldo >= cuota ? 'fiesta' : saldo > 0 ? 'austero' : 'casita';
+  return {k, saldo, cuota, r:r.n, meses: cuota ? saldo/cuota : 0};
 }
 
 /* =================== render: pensión =================== */
@@ -4536,19 +4617,42 @@ function renderHome(){
   const bolsillo = S.rubros
     .filter(r => (r.cat||'').toLowerCase()==='corriente' && r.nat!=='Evento')
     .map(r => r.n);
+  /* Los rubros excedidos SE RESTAN. Sumar solo los positivos daba una cifra
+     alegre que contradecía a la barra de abajo: decía que quedaban $265.157
+     mientras el corriente estaba $818.248 por encima del presupuesto. Un
+     rubro en rojo es plata que ya saliste a gastar de otro lado. */
   let disp=0, rest=0, pto=0, eje=0;
+  const det = [];
   for (const r of bolsillo){ const e=estado(r,ym);
-    disp+=Math.max(0,e.disp); rest=e.rest; pto+=e.p; eje+=e.e; }
-  const porDia = rest>0 ? disp/rest : disp;
+    disp+=e.disp; rest=e.rest; pto+=e.p; eje+=e.e; det.push({r, d:e.disp}); }
+  const rojos = det.filter(x=>x.d<0).sort((a,b)=>a.d-b.d);
+  const porDia = rest>0 ? Math.max(0,disp)/rest : Math.max(0,disp);
   const d=daysIn(ym), c=corte(ym), pc=d?c/d:0;
+  const pasado = disp<0;
+  $('#hoHeroK').textContent = pasado
+    ? 'Gasto de bolsillo excedido' : 'Gasto de bolsillo disponible';
   $('#hoHeroN').textContent = money(disp);
   $('#hoHeroN').style.color = disp<=0 ? 'var(--bad)' : 'var(--tx)';
   $('#hoHeroC').innerHTML = rest>0
     ? `en ${bolsillo.length} rubros corrientes · quedan ${rest} ${rest===1?'día':'días'} de ${ymLabel(ym)}`
     : `${ymLabel(ym)} ya cerró`;
-  $('#hoHeroD').innerHTML = rest>0
-    ? `<b>${money(porDia)}</b> por día para no pasarte`
-    : `<b>${money(eje)}</b> ejecutado en el mes`;
+  $('#hoHeroD').innerHTML = pasado
+    ? `Te pasaste en ${rojos.slice(0,2).map(x=>x.r+' '+money(x.d)).join(' y ')}`
+      + (rojos.length>2 ? ` y ${rojos.length-2} más` : '')
+    : rest>0
+      ? `<b>${money(porDia)}</b> por día para no pasarte`
+      : `<b>${money(eje)}</b> ejecutado en el mes`;
+  /* --- el avatar: cómo viene el plan, de un vistazo --- */
+  const avat = avatar();
+  const avEl = $('#hoAva');
+  avEl.style.display = avat ? 'block' : 'none';
+  if (avat){
+    avEl.className = 'ava '+avat.k;
+    $('#hoAvaFig').innerHTML = AVA_SVG[avat.k];
+    $('#hoAvaT').textContent = AVA_ET[avat.k];
+    avEl.title = avat.r+': '+money(avat.saldo)+' · cuota '+money(avat.cuota);
+  }
+
   /* --- cupo de ocio: sábados, domingos y festivos ---
      Weekend es Hábito, así que su disponible sale del presupuesto del mes.
      Recreación es Evento, así que sale del saldo de su sobre. Cada uno con
@@ -4568,23 +4672,32 @@ function renderHome(){
     /* si el ocio se paga con monedas, el cupo se recorta a lo desbloqueado */
     let cup = null;
     if (mon){ cup = cupoOcio(r, ym); d = Math.min(d, cup.puede); }
-    ocio += Math.max(0, d);
+    ocio += d;                      /* un rubro de ocio en rojo también resta */
     return {r, d, sobre:o.nat==='Evento', cup};
   });
 
-  $('#hoFinde').style.display = (libre.si && ocioR.length) ? 'block' : 'none';
+  /* cadena vacía, no 'block': así manda el display:grid de la hoja de estilos
+     y el monto puede subir a la línea de la etiqueta */
+  const hayFinde = libre.si && ocioR.length;
+  $('#hoFinde').style.display = hayFinde ? '' : 'none';
+  /* en día libre el bloque de ocio ya dice cuánto hay para hoy: dejar arriba
+     el "por día" es un segundo número para lo mismo, que confunde y ocupa fila */
+  $('#hoHeroD').style.display = hayFinde ? 'none' : '';
   if (libre.si && ocioR.length){
     $('#hoFindeE').textContent = libre.tipo==='festivo'
       ? 'festivo · '+libre.nombre : libre.nombre;
-    $('#hoFindeN').textContent = '+ '+money(ocio);
+    $('#hoFindeN').textContent = (ocio>0?'+ ':'')+money(ocio);
     $('#hoFindeN').style.color = ocio<=0 ? 'var(--bad)' : 'var(--acc2)';
     $('#hoFindeD').innerHTML = ocioDet.map(x=>
       `${x.r} <b style="color:${x.d<0?'var(--bad)':'var(--tx2)'}">${money(x.d)}</b>`
       + (x.sobre?' <em style="font-style:normal;opacity:.6">del sobre</em>':'')
     ).join(' · ');
-    $('#hoFindeT').innerHTML = `Para hoy podés gastar <b>${money(disp+ocio)}</b>`
-      + (mon ? `<br><span class="lbl">${mon.mon} monedas · ${(mon.frac*100).toFixed(0)}%
-          del ocio desbloqueado</span>` : '');
+    const hoy = disp + ocio;
+    $('#hoFindeT').innerHTML = (hoy>0
+      ? `Para hoy podés gastar <b>${money(hoy)}</b>`
+      : `<b style="color:var(--bad)">Hoy no queda cupo</b> · vas ${money(-hoy)} por encima`)
+      + (mon ? ` · <span class="lbl">${mon.mon} monedas, ${(mon.frac*100).toFixed(0)}%
+          del ocio</span>` : '');
   }
 
   const usado = pto? Math.min(100, eje/pto*100) : 0;
