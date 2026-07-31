@@ -1543,7 +1543,7 @@ input[type=text],input[type=number],input[type=date],select{
 <div id="toast"></div>
 <script>
 'use strict';
-const VERSION = '2026.07.31-08';   /* subí esto en cada cambio publicado */
+const VERSION = '2026.07.31-10';   /* subí esto en cada cambio publicado */
 /* ===================================================================
    Diario · Presupuesto — PWA local-first
    Los datos viven en IndexedDB en este dispositivo. Nada sale de acá
@@ -2830,7 +2830,7 @@ function prPintar(){
       ${(()=> {
         let rows = '';
         const nPagas = preCuotasPagas(p);
-        const cuotasPagasList = FLU.filter(f => f.actId === p.actId && f.tipo === 'cuota').sort((a,b) => a.fecha<b.fecha?-1:1);
+        const cuotasPagasList = FLU.filter(f => f.actId === p.actId && f.tipo === 'cuota' && !f.borrado).sort((a,b) => a.fecha<b.fecha?-1:1);
         for (let i=1; i<=nPagas; i++){
           const fTheo = e.c.filas[i-1];
           const ref = 'cuo|' + p.id + '|' + i;
@@ -3086,14 +3086,14 @@ async function prEditarCuota(pId, kNum){
   const fTheo = filas[kNum - 1] || null;
   const ref = 'cuo|'+p.id+'|'+kNum;
   
-  let fl = FLU.find(f => f.actId === p.actId && (f.ref === ref || f.nota === 'cuota '+kNum+' de '+filas.length));
+  let fl = FLU.find(f => !f.borrado && f.actId === p.actId && (f.ref === ref || f.nota === 'cuota '+kNum+' de '+filas.length));
   if (!fl){
-    const cuotas = FLU.filter(f => f.actId === p.actId && f.tipo === 'cuota').sort((a,b) => a.fecha<b.fecha?-1:1);
+    const cuotas = FLU.filter(f => f.actId === p.actId && f.tipo === 'cuota' && !f.borrado).sort((a,b) => a.fecha<b.fecha?-1:1);
     fl = cuotas[kNum - 1];
   }
   
   let movs = MOV.filter(m => vivo(m) && (m.ref === ref || (m.obs && m.obs.includes('cuota '+kNum))));
-  let val = VAL.find(v => v.actId === p.actId && (v.ref === ref || (v.nota && v.nota.includes('cuota '+kNum))));
+  let val = VAL.find(v => !v.borrado && v.actId === p.actId && (v.ref === ref || (v.nota && v.nota.includes('cuota '+kNum))));
 
   const fActual = fl ? fl.fecha : (fTheo ? fTheo.fecha : todayISO());
   const fNue = prompt(`Editar Cuota ${kNum} de ${p.n}\n\nNueva fecha del pago (AAAA-MM-DD):`, fActual);
@@ -3393,7 +3393,7 @@ function prDoc(p, tipo){
   const marca = 'Credi-' + ((CFG.nombre || (S&&S.nombre) || '').trim() || 'Diario');
   const e = preEstado(p);
   const hoy = new Date().toISOString().slice(0,10);
-  const cuo = p.actId ? FLU.filter(f=>f.actId===p.actId && f.tipo==='cuota')
+  const cuo = p.actId ? FLU.filter(f=>f.actId===p.actId && f.tipo==='cuota' && !f.borrado)
     .sort((a,b)=>a.fecha<b.fecha?-1:1) : [];
   const fmt = n => '$'+new Intl.NumberFormat('es-CO',{maximumFractionDigits:0}).format(Math.round(n));
   const esEdo = tipo==='estado';
@@ -3403,10 +3403,20 @@ function prDoc(p, tipo){
     const est = esEdo ? (pago
       ? `<td class="ok">pagada · ${pago.fecha}</td>`
       : `<td class="pend">pendiente</td>`) : '';
+    /* Si es estado de cuenta y la cuota fue pagada, mostrar montos REALES */
+    let montoReal = f.pago, intReal = f.interes, capReal = f.capital, saldoReal = f.fin;
+    if (esEdo && pago){
+      montoReal = pago.monto || f.pago;
+      /* buscar el movimiento de intereses para obtener el interés real */
+      const refCuo = pago.ref || ('cuo|'+p.id+'|'+(i+1));
+      const movInt = MOV.find(m => vivo(m) && m.ref === refCuo && m.r === 'Intereses a favor');
+      intReal = movInt ? movInt.valor : f.interes;
+      capReal = montoReal - intReal;
+    }
     return `<tr${esEdo&&pago?' class="paga"':''}>
-      <td>${f.k}</td><td>${f.fecha}</td>
-      <td class="n">${fmt(f.pago)}</td><td class="n">${fmt(f.interes)}</td>
-      <td class="n">${fmt(f.capital)}</td><td class="n">${fmt(f.fin)}</td>${est}</tr>`;
+      <td>${f.k}</td><td>${esEdo && pago ? pago.fecha : f.fecha}</td>
+      <td class="n">${fmt(esEdo && pago ? montoReal : f.pago)}</td><td class="n">${fmt(esEdo && pago ? intReal : f.interes)}</td>
+      <td class="n">${fmt(esEdo && pago ? capReal : f.capital)}</td><td class="n">${fmt(f.fin)}</td>${est}</tr>`;
   }).join('');
 
   return `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8">
@@ -3461,13 +3471,14 @@ function prDoc(p, tipo){
 ${esEdo?`<div class="res">
   <div><span>Cuotas pagadas</span><b>${e.k} de ${e.c.filas.length}</b></div>
   <div><span>Saldo de capital</span><b>${fmt(e.saldo)}</b></div>
+  <div><span>Total recibido</span><b>${fmt(cuo.reduce((s,f)=>s+(f.monto||0),0))}</b></div>
   <div><span>${e.sig?'Próxima cuota':'Estado'}</span><b>${e.sig
     ? e.sig.fecha+' · '+fmt(e.sig.pago) : 'PAGADO'}</b></div>
 </div>`:''}
 
 <h2>${esEdo?'Detalle de pagos':'Cuadro de amortización'}</h2>
 <table>
-  <tr><th>#</th><th>Vence</th><th class="n">Cuota</th><th class="n">Interés</th>
+  <tr><th>#</th><th>${esEdo?'Fecha pago':'Vence'}</th><th class="n">Cuota</th><th class="n">Interés</th>
     <th class="n">Capital</th><th class="n">Saldo</th>${esEdo?'<th>Estado</th>':''}</tr>
   ${filas}
 </table>
@@ -3491,32 +3502,10 @@ function prImprimir(p, tipo){
    medio dejaría el cuadro con huecos. Se buscan las piezas por la
    referencia; para cuotas viejas —de antes de las referencias— se cae a
    buscar por la observación. */
-async function prDeshacer(p){
-  const cuo = FLU.filter(f=>f.actId===p.actId && f.tipo==='cuota');
-  if (!cuo.length){ toast('No hay cuotas registradas', true); return; }
-  const k = cuo.length;
-  if (!confirm('¿Deshacer la cuota '+k+' de «'+p.n+'»? Se quitan el flujo, los '
-    +'movimientos y la valoración que generó.')) return;
-  const ult = cuo[cuo.length-1];
-  const ref = ult.ref;
-  /* el flujo */
-  FLU = FLU.filter(x=>x.id!==ult.id); await DB.del('flu', ult.id);
-  /* los movimientos: con referencia, o por observación si son viejos */
-  const esDeCuota = m => (ref && m.ref===ref)
-    || m.obs==='cuota '+k+' '+p.n
-    || m.obs==='interés '+p.n+' · cuota '+k
-    || m.obs==='amortización '+p.n+' · cuota '+k;
-  let bajas = 0;
-  for (const m of MOV) if (!m.borrado && esDeCuota(m)){
-    m.borrado = Date.now(); await DB.put('mov', m); bajas++;
-  }
-  /* la valoración */
-  const val = VAL.filter(v=>v.actId===p.actId &&
-    ((ref && v.ref===ref) || (v.nota||'').includes('tras cuota '+k)));
-  for (const v of val){ VAL = VAL.filter(x=>x.id!==v.id); await DB.del('val', v.id); }
-  prPintar(); render(); autoSave();
-  toast('Cuota '+k+' deshecha · '+bajas+' movimientos dados de baja');
-}
+/* NOTA: esta segunda prDeshacer queda como stub; la versión definitiva
+   con soft-delete está arriba (línea ~2993). Si se llega aquí por error,
+   delega a la de arriba. */
+/* async function prDeshacer(p) — see above */
 
 /* =================== render: pensión =================== */
 function renderPen(){
@@ -4350,14 +4339,14 @@ function flujosDerivados(a){
 
 const flujosDe = id => {
   const a = ACT.find(x=>x.id===id);
-  return [...FLU.filter(f=>f.actId===id), ...flujosDerivados(a)]
+  return [...FLU.filter(f=>f.actId===id && !f.borrado), ...flujosDerivados(a)]
     .sort((x,y)=>x.fecha<y.fecha?-1:1);
 };
 const valDe = id => {
   const a = ACT.find(x=>x.id===id);
   const m = a ? valMercado(a) : null;      /* precio en vivo manda */
   if (m) return m;
-  const v = VAL.filter(x=>x.actId===id).sort((a,b)=>a.fecha<b.fecha?-1:1);
+  const v = VAL.filter(x=>x.actId===id && !x.borrado).sort((a,b)=>a.fecha<b.fecha?-1:1);
   return v.length ? v[v.length-1] : null;
 };
 
@@ -4618,7 +4607,8 @@ async function abrirCotizadorTrii(a){
   };
   $('#detBody').onclick = async e => {
     const fid = e.target.dataset.delf; if(!fid) return;
-    FLU = FLU.filter(x=>x.id!==fid); await DB.del('flu', fid);
+    const fObj = FLU.find(x=>x.id===fid);
+    if (fObj){ fObj.borrado = Date.now(); await DB.put('flu', fObj); }
     detalle(id); renderAct(); autoSave(); toast('Flujo borrado');
   };
 }
