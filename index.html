@@ -1530,7 +1530,7 @@ input[type=text],input[type=number],input[type=date],select{
 <div id="toast"></div>
 <script>
 'use strict';
-const VERSION = '2026.07.30-20';   /* subí esto en cada cambio publicado */
+const VERSION = '2026.07.30-21';   /* subí esto en cada cambio publicado */
 /* ===================================================================
    Diario · Presupuesto — PWA local-first
    Los datos viven en IndexedDB en este dispositivo. Nada sale de acá
@@ -6224,13 +6224,22 @@ async function boot(){
   ym = ymOf(new Date());
   const cfgs = await DB.all('cfg');
   cfgs.forEach(c=>{
-    if (c.k==='rubrosExtra'){ (c.v||[]).forEach(r=>{
-      if(!RB[r.n]){ S.rubros.unshift(r); RB[r.n]=r; } }); }
+    /* los rubros propios necesitan la base montada: se guardan para después.
+       Procesarlos acá, con S todavía nulo, mataba el arranque entero en cuanto
+       existía el registro — la app quedaba «vacía» con los datos intactos. */
+    if (c.k==='rubrosExtra'){ boot._rubrosX = c.v || []; }
     else if (c.k==='catsExtra'){ CATX = c.v || []; }
     else CFG[c.k]=c.v;
   });
   const base = await DB.get('cfg','base');
-  if (base && base.v) montar(base.v);
+  if (base && base.v){
+    try { montar(base.v); }
+    catch(e){ console.error('base corrupta', e); }
+  }
+  if (hayDatos()) for (const r of (boot._rubrosX||[])){
+    try { if (r && r.n && !RB[r.n]){ S.rubros.unshift(r); RB[r.n]=r; } }
+    catch(e){ console.error('rubro extra inválido', r, e); }
+  }
   MOV = await DB.all('mov');
   /* activos: la semilla se carga una vez; después manda lo que hay en la base */
   ACT = await DB.all('act'); FLU = await DB.all('flu'); VAL = await DB.all('val');
