@@ -1543,7 +1543,7 @@ input[type=text],input[type=number],input[type=date],select{
 <div id="toast"></div>
 <script>
 'use strict';
-const VERSION = '2026.07.31-06';   /* subí esto en cada cambio publicado */
+const VERSION = '2026.07.31-07';   /* subí esto en cada cambio publicado */
 /* ===================================================================
    Diario · Presupuesto — PWA local-first
    Los datos viven en IndexedDB en este dispositivo. Nada sale de acá
@@ -2819,6 +2819,8 @@ function prPintar(){
     </div>`}
     ${!bor && preCuotasPagas(p)>0 ? `<button class="primary gray" id="prDeshacerBtn"
       style="margin-bottom:8px;color:var(--warn)">Deshacer la última cuota (${preCuotasPagas(p)})</button>`:''}
+    ${!bor && preCuotasPagas(p)>0 ? `<button class="primary gray" id="prLimpiarBtn"
+      style="margin-bottom:8px;color:var(--warn);font-size:12.5px">Corregir: poner número real de cuotas pagadas</button>`:''}
     <button class="primary gray" id="prCorreo" style="margin-bottom:8px">Enviar estado por correo</button>
     <button class="primary gray" id="prPdfPlan" style="margin-bottom:8px">Plan de pagos en PDF</button>
     ${bor?'':'<button class="primary gray" id="prPdfEdo" style="margin-bottom:8px">Estado de cuenta en PDF</button>'}
@@ -2852,6 +2854,8 @@ function prPintar(){
   $('#prPdfPlan').onclick = () => prImprimir(p, 'plan');
   const dh = $$real('#prDeshacerBtn');
   if (dh) dh.onclick = () => prDeshacer(p);
+  const lb = $$real('#prLimpiarBtn');
+  if (lb) lb.onclick = () => prLimpiarCuotas(p);
   const pe = $$real('#prPdfEdo');
   if (pe) pe.onclick = () => prImprimir(p, 'estado');
   const ej = $$real('#prEjecutarBtn');
@@ -2987,43 +2991,92 @@ function prEnviarCorreo(p, e){
 }
 
 async function prDeshacer(p){
-  const k = preCuotasPagas(p);
-  if (k <= 0){ toast('No hay cuotas pagadas para deshacer', true); return; }
-  
-  if (!confirm(`¿Eliminar la última cuota (cuota ${k}) del préstamo "${p.n}"?\n\nSe eliminarán sus flujos y movimientos asociados.`)) return;
+  /* Buscar TODAS las cuotas de este préstamo en FLU, ordenadas por fecha */
+  const cuotas = FLU.filter(f => f.actId === p.actId && f.tipo === 'cuota')
+                     .sort((a,b) => a.fecha<b.fecha ? -1 : a.fecha>b.fecha ? 1 : (a.ts||0)-(b.ts||0));
+  if (!cuotas.length){ toast('No hay cuotas pagadas para deshacer', true); return; }
 
-  const e = preCuadro(p);
-  const ref = 'cuo|' + p.id + '|' + k;
+  const ult = cuotas[cuotas.length - 1];   /* la última cuota registrada */
+  const kLabel = cuotas.length;
 
-  /* 1. Eliminar flujos en FLU */
-  const fls = FLU.filter(f => f.actId === p.actId && (f.ref === ref || f.nota === 'cuota '+k+' de '+e.filas.length));
-  for (const f of fls){
-    await DB.del('flu', f.id);
-  }
-  FLU = FLU.filter(f => !fls.some(x => x.id === f.id));
+  if (!confirm(
+    `¿Eliminar la cuota más reciente del préstamo "${p.n}"?\n\n`+
+    `Cuota #${kLabel} · fecha ${ult.fecha} · monto ${money(ult.monto)}\n\n`+
+    `Se borrarán el flujo, la valoración y los movimientos asociados.`)) return;
 
-  /* 2. Eliminar valoraciones en VAL */
-  const vals = VAL.filter(v => v.actId === p.actId && (v.ref === ref || (v.nota && v.nota.includes('cuota '+k))));
-  for (const v of vals){
-    await DB.del('val', v.id);
-  }
-  VAL = VAL.filter(v => !vals.some(x => x.id === v.id));
+  /* 1. Borrar el flujo de FLU */
+  await DB.del('flu', ult.id);
+  FLU = FLU.filter(f => f.id !== ult.id);
 
-  /* 3. Marcar movimientos como borrados en MOV */
-  const movs = MOV.filter(m => vivo(m) && (m.ref === ref || (m.obs && m.obs.includes('cuota '+k))));
-  for (const m of movs){
-    m.borrado = Date.now();
-    await DB.put('mov', m);
+  /* 2. Borrar la valoración asociada (por ref, por nota o por fecha+actId) */
+  const valCands = VAL.filter(v => v.actId === p.actId && (
+    (ult.ref && v.ref === ult.ref) ||
+    (v.nota && v.nota.includes('cuota '+kLabel)) ||
+    (v.fecha === ult.fecha)
+  ));
+  for (const v of valCands){ await DB.del('val', v.id); }
+  VAL = VAL.filter(v => !valCands.some(x => x.id === v.id));
+
+  /* 3. Marcar los movimientos como borrados (por ref, obs o fecha) */
+  const movCands = MOV.filter(m => vivo(m) && (
+    (ult.ref && m.ref === ult.ref) ||
+    (m.obs && m.obs.includes('cuota '+kLabel) && m.obs.includes(p.n)) ||
+    (m.obs && m.obs.includes('cuota '+kLabel) && m.fecha === ult.fecha)
+  ));
+  for (const m of movCands){ m.borrado = Date.now(); await DB.put('mov', m); }
+
+  p.ts = Date.now();
+  await DB.put('pre', p);
+  if (PRA && PRA.p && PRA.p.id === p.id) PRA.p = p;
+  prPintar(); render(); autoSave();
+  toast(`Cuota ${kLabel} (${fCorta(ult.fecha)}) eliminada · quedan ${cuotas.length - 1}`);
+}
+
+/* Limpieza masiva: reduce las cuotas pagadas al número real que el usuario indica */
+async function prLimpiarCuotas(p){
+  const cuotas = FLU.filter(f => f.actId === p.actId && f.tipo === 'cuota')
+                     .sort((a,b) => a.fecha<b.fecha ? -1 : a.fecha>b.fecha ? 1 : (a.ts||0)-(b.ts||0));
+  const total = cuotas.length;
+  if (!total){ toast('No hay cuotas', true); return; }
+
+  const nStr = prompt(
+    `Este préstamo tiene ${total} cuotas registradas en el sistema.\n`+
+    `¿Cuántas cuotas se han pagado REALMENTE?\n\n`+
+    `Las cuotas sobrantes se eliminarán de la más reciente a la más antigua.`, '7');
+  if (nStr === null) return;
+  const nReal = Math.max(0, Math.round(+nStr));
+  if (nReal >= total){ toast('No hay nada que limpiar: '+total+' ≤ '+nReal, true); return; }
+
+  const sobran = cuotas.slice(nReal);   /* las que están de más */
+  if (!confirm(`Se eliminarán ${sobran.length} cuotas fantasma (de la ${nReal+1} a la ${total}).\n`+
+    `Quedarán ${nReal} cuotas reales.\n\n¿Continuar?`)) return;
+
+  for (const fl of sobran){
+    /* Borrar flujo */
+    await DB.del('flu', fl.id);
+    FLU = FLU.filter(f => f.id !== fl.id);
+
+    /* Borrar valoración */
+    const vals = VAL.filter(v => v.actId === p.actId && (
+      (fl.ref && v.ref === fl.ref) ||
+      (v.fecha === fl.fecha && v.nota && v.nota.includes('cuota'))
+    ));
+    for (const v of vals){ await DB.del('val', v.id); }
+    VAL = VAL.filter(v => !vals.some(x => x.id === v.id));
+
+    /* Borrar movimientos */
+    const movs = MOV.filter(m => vivo(m) && (
+      (fl.ref && m.ref === fl.ref) ||
+      (m.fecha === fl.fecha && m.obs && m.obs.includes(p.n))
+    ));
+    for (const m of movs){ m.borrado = Date.now(); await DB.put('mov', m); }
   }
 
   p.ts = Date.now();
   await DB.put('pre', p);
   if (PRA && PRA.p && PRA.p.id === p.id) PRA.p = p;
-
-  prPintar();
-  render();
-  autoSave();
-  toast(`Cuota ${k} eliminada del préstamo`);
+  prPintar(); render(); autoSave();
+  toast(`Limpieza: ${sobran.length} cuotas eliminadas · quedan ${nReal}`);
 }
 
 async function prEditarCuota(pId, kNum){
