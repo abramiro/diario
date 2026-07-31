@@ -1543,7 +1543,7 @@ input[type=text],input[type=number],input[type=date],select{
 <div id="toast"></div>
 <script>
 'use strict';
-const VERSION = '2026.07.31-03';   /* subí esto en cada cambio publicado */
+const VERSION = '2026.07.31-04';   /* subí esto en cada cambio publicado */
 /* ===================================================================
    Diario · Presupuesto — PWA local-first
    Los datos viven en IndexedDB en este dispositivo. Nada sale de acá
@@ -2114,6 +2114,7 @@ function renderReg(){
       <div class="rec-t"><b>⇄ ${nomB(m.de)} → ${nomB(m.a)}</b>
         <span>${m.fecha===todayISO()?'hoy':m.fecha} · traslado${m.obs?' · '+m.obs:''}</span></div>
       <div class="rec-v mono" style="color:var(--tx2)">${money(m.valor)}</div>
+      <button class="chipbtn" data-edit="${m.id}" style="padding:2px 8px;font-size:11px;margin:0 4px">Editar</button>
       <button class="rec-x" data-del="${m.id}">&times;</button>
     </div>`;
     const cur = m.moneda && m.moneda!=='COP';
@@ -2122,6 +2123,7 @@ function renderReg(){
         <span>${m.fecha === todayISO() ? 'hoy' : m.fecha} · ${m.bolsa}${
           cur ? ' · '+montoEn(m.moneda, m.valorOrig) : ''}${m.obs ? ' · '+m.obs : ''}</span></div>
       <div class="rec-v mono">${money(m.valor)}</div>
+      <button class="chipbtn" data-edit="${m.id}" style="padding:2px 8px;font-size:11px;margin:0 4px">Editar</button>
       <button class="rec-x" data-del="${m.id}">&times;</button>
     </div>`;
   }).join('') : '<div class="vacio">Todavía no registraste nada en este dispositivo.</div>';
@@ -2813,15 +2815,20 @@ function prPintar(){
     ${bor?'':'<button class="primary gray" id="prPdfEdo" style="margin-bottom:8px">Estado de cuenta en PDF</button>'}
     <button class="primary gray" id="prCopiar" style="margin-bottom:8px">Copiar estado para el deudor</button>
     <button class="primary gray" id="prEditar" style="margin-bottom:8px">Editar condiciones</button>
-    ${!bor && preCuotasPagas(p)>0 ? `<div class="card"><h3>Cuotas pagadas</h3>
+    ${!bor && preCuotasPagas(p)>0 ? `<div class="card"><h3>Cuotas pagadas (${preCuotasPagas(p)})</h3>
       ${(()=> {
         let rows = '';
-        for (let i=1; i<=preCuotasPagas(p); i++){
-          const f = e.c.filas[i-1];
+        const nPagas = preCuotasPagas(p);
+        for (let i=1; i<=nPagas; i++){
+          const fTheo = e.c.filas[i-1];
+          const ref = 'cuo|' + p.id + '|' + i;
+          const flReal = FLU.find(fl => fl.actId === p.actId && (fl.ref === ref || fl.nota === 'cuota '+i+' de '+e.c.filas.length));
+          const fFecha = flReal ? flReal.fecha : (fTheo ? fTheo.fecha : '');
+          const fMonto = flReal ? flReal.monto : (fTheo ? Math.round(fTheo.pago) : 0);
           rows += `<div class="f" style="margin-bottom:6px;font-size:12.5px">
-            <span>Cuota ${i} (${fCorta(f.fecha)})</span>
-            <span class="mono">${money(Math.round(f.pago))}</span>
-            <button class="chipbtn" style="padding:2px 8px;font-size:11px" onclick="prEditarCuota(PRA.p, ${i})">Editar</button>
+            <span>Cuota ${i} (${fCorta(fFecha)})</span>
+            <span class="mono">${money(fMonto)}</span>
+            <button class="chipbtn" style="padding:2px 8px;font-size:11px" onclick="prEditarCuota('${p.id}', ${i})">Editar</button>
           </div>`;
         }
         return rows;
@@ -2968,38 +2975,48 @@ function prEnviarCorreo(p, e){
   window.open(`mailto:?subject=${asunto}&body=${cuerpo}`, '_blank');
 }
 
-async function prEditarCuota(p, kNum){
+async function prEditarCuota(pId, kNum){
+  const p = typeof pId === 'string' ? PRE.find(x => x.id === pId) : pId;
+  if (!p){ toast('No se encontró el préstamo', true); return; }
+
   const e = preCuadro(p);
   const ref = 'cuo|'+p.id+'|'+kNum;
-  const movs = MOV.filter(m => vivo(m) && m.ref === ref);
-  const fl = FLU.find(f => f.ref === ref);
-  const val = VAL.find(v => v.ref === ref);
+  
+  let fl = FLU.find(f => f.actId === p.actId && (f.ref === ref || f.nota === 'cuota '+kNum+' de '+e.filas.length));
+  if (!fl){
+    const cuotas = FLU.filter(f => f.actId === p.actId && f.tipo === 'cuota').sort((a,b) => a.fecha<b.fecha?-1:1);
+    fl = cuotas[kNum - 1];
+  }
+  
+  let movs = MOV.filter(m => vivo(m) && (m.ref === ref || (m.obs && m.obs.includes('cuota '+kNum))));
+  let val = VAL.find(v => v.actId === p.actId && (v.ref === ref || (v.nota && v.nota.includes('cuota '+kNum))));
 
-  const fActual = fl ? fl.fecha : (e.c.filas[kNum-1] ? e.c.filas[kNum-1].fecha : todayISO());
-  const fNue = prompt('Nueva fecha del pago (AAAA-MM-DD)', fActual);
+  const fActual = fl ? fl.fecha : (e.filas[kNum-1] ? e.filas[kNum-1].fecha : todayISO());
+  const fNue = prompt(`Editar Cuota ${kNum} de ${p.n}\n\nNueva fecha del pago (AAAA-MM-DD):`, fActual);
   if (fNue===null) return;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(fNue)){ toast('Fecha inválida', true); return; }
 
-  const mActual = fl ? fl.monto : (e.c.filas[kNum-1] ? Math.round(e.c.filas[kNum-1].pago) : 0);
-  const mNue = prompt('Nuevo valor TOTAL de la cuota pagada ($)', mActual);
+  const mActual = fl ? fl.monto : (e.filas[kNum-1] ? Math.round(e.filas[kNum-1].pago) : 0);
+  const mNue = prompt(`Monto TOTAL de la cuota pagada ($):`, mActual);
   if (mNue===null) return;
   const mVal = +mNue || 0;
 
   const miMov = movs.find(m => m.r === 'Intereses a favor');
-  const inteActual = miMov ? miMov.valor : (e.c.filas[kNum-1] ? Math.round(e.c.filas[kNum-1].interes) : 0);
-  const inteNue = prompt('Monto abonado a INTERESES ($)', inteActual);
+  const inteActual = miMov ? miMov.valor : (e.filas[kNum-1] ? Math.round(e.filas[kNum-1].interes) : 0);
+  const inteNue = prompt(`Monto abonado a INTERESES ($):`, inteActual);
   if (inteNue===null) return;
   const inteVal = +inteNue || 0;
 
   const mtMov = movs.find(m => m.tipo==='traslado');
   const destActual = mtMov ? mtMov.a : (p.bolsa || 'Caja');
-  const destNue = prompt('Bolsa que recibió la cuota (destino)', destActual);
+  const destNue = prompt(`Bolsa que recibió la cuota (destino):`, destActual);
   if (destNue===null) return;
 
-  if (fl){ fl.fecha = fNue; fl.monto = mVal; await DB.put('flu', fl); }
-  if (val){ val.fecha = fNue; await DB.put('val', val); }
+  if (fl){ fl.fecha = fNue; fl.monto = mVal; fl.ref = ref; await DB.put('flu', fl); }
+  if (val){ val.fecha = fNue; val.ref = ref; await DB.put('val', val); }
 
   for (const m of movs){
-    m.fecha = fNue; m.dt = fNue + 'T12:00'; m.ym = fNue.slice(0,7);
+    m.fecha = fNue; m.dt = fNue + 'T12:00'; m.ym = fNue.slice(0,7); m.ref = ref;
     if (m.tipo === 'traslado'){
       m.a = destNue;
       m.deOrig = mVal; m.aOrig = mVal; m.valor = mVal;
@@ -3008,7 +3025,14 @@ async function prEditarCuota(p, kNum){
     }
     await DB.put('mov', m);
   }
-  prPintar(); render(); autoSave();
+
+  p.ts = Date.now();
+  await DB.put('pre', p);
+  PRA.p = p;
+
+  prPintar();
+  render();
+  autoSave();
   toast('Cuota ' + kNum + ' del préstamo editada correctamente');
 }
 
@@ -5281,11 +5305,11 @@ function rehidratar(){
 /* lo registrado en la app se suma al histórico, con la misma forma */
 function universo(){
   const loc = MOV.filter(m=>vivo(m) && m.tipo!=='traslado').map(m=>({
-    f:m.fecha, r:m.r, c:(RB[m.r]||{}).cat||'', b:m.bolsa,
+    id:m.id, f:m.fecha, r:m.r, c:(RB[m.r]||{}).cat||'', b:m.bolsa,
     v:m.valor, o:m.obs||'', i:(RB[m.r]||{}).nat==='Ingreso'?1:0,
     m:m.moneda||'COP', vo:m.valorOrig!=null?m.valorOrig:m.valor, src:'app'}));
   const tras = (HFIL.tipo==='todo'||HFIL.tipo==='traslado') ? MOV.filter(m=>vivo(m) && m.tipo==='traslado').map(m=>({
-    f:m.fecha, r:'⇄ '+nomB(m.de)+' → '+nomB(m.a), c:'Traslado', b:nomB(m.de),
+    id:m.id, f:m.fecha, r:'⇄ '+nomB(m.de)+' → '+nomB(m.a), c:'Traslado', b:nomB(m.de),
     v:m.valor, o:m.obs||'', i:0, m:'COP', vo:m.valor, src:'app'})) : [];
   return [...(HIST||[]), ...loc, ...tras];
 }
@@ -5463,7 +5487,9 @@ function renderHist(){
       <div class="a"><b>${m.r}</b>
         <span>${m.f} · ${m.b||'—'}${m.m!=='COP'?' · '+montoEn(m.m,m.vo):''}${
           m.o?' · '+m.o:''}${m.src==='app'?' · registrado acá':''}</span></div>
-      <div class="v">${money(m.v)}</div></div>`).join('');
+      <div class="v">${money(m.v)}
+        ${m.id ? `<button class="chipbtn" data-editmov="${m.id}" style="padding:2px 8px;font-size:11px;margin-left:8px">Editar</button>` : ''}
+      </div></div>`).join('');
   const abierta = $('#hLista').style.display !== 'none';
   $('#hMasFilas').style.display = (abierta && S2.length>HLIM) ? 'block' : 'none';
   $('#hMasFilas').textContent = `Ver más · ${nf.format(S2.length-HLIM)} restantes`;
@@ -6545,6 +6571,7 @@ $('#hTipo').onchange = e => { HFIL.tipo=e.target.value; HLIM=60; renderHist(); }
 $('#hD1').onchange = e => { HFIL.d1=e.target.value; HFIL.rango='libre'; HLIM=60; renderHist(); };
 $('#hD2').onchange = e => { HFIL.d2=e.target.value; HFIL.rango='libre'; HLIM=60; renderHist(); };
 $('#hMasFilas').onclick = () => { HLIM+=120; renderHist(); };
+$('#hLista').onclick = e => { const b=e.target.closest('[data-editmov]'); if (b) editarMov(b.dataset.editmov); };
 $('#hCSV').onclick = exportarHist;
 $('#hCSVp').onclick = exportarPivot;
 $('#hCSVt').onclick = exportarTodo;
