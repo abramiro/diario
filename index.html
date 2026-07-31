@@ -1188,6 +1188,7 @@ input[type=text],input[type=number],input[type=date],select{
       <button class="chipbtn" id="btnNuevaCta">Nueva cuenta</button>
       <button class="chipbtn" id="btnNuevoBol">Nuevo bolsillo</button>
     </div>
+    <button class="primary gray" id="btnLimpiarTrii" style="margin-bottom:12px;font-size:12.5px">Agrupar / Limpiar bolsillos duplicados de Trii</button>
     <div id="cfBolsas"></div>
     <p class="note" style="margin-top:10px">Un <b>bolsillo</b> es una subdivisión de una
       cuenta: el saldo de la cuenta es la suma de sus bolsillos. Tocá uno para renombrarlo
@@ -1542,7 +1543,7 @@ input[type=text],input[type=number],input[type=date],select{
 <div id="toast"></div>
 <script>
 'use strict';
-const VERSION = '2026.07.31-02';   /* subí esto en cada cambio publicado */
+const VERSION = '2026.07.31-03';   /* subí esto en cada cambio publicado */
 /* ===================================================================
    Diario · Presupuesto — PWA local-first
    Los datos viven en IndexedDB en este dispositivo. Nada sale de acá
@@ -2968,26 +2969,128 @@ function prEnviarCorreo(p, e){
 }
 
 async function prEditarCuota(p, kNum){
+  const e = preCuadro(p);
   const ref = 'cuo|'+p.id+'|'+kNum;
+  const movs = MOV.filter(m => vivo(m) && m.ref === ref);
   const fl = FLU.find(f => f.ref === ref);
-  if (!fl){ toast('No se encontró la cuota ' + kNum, true); return; }
-  const fNue = prompt('Nueva fecha (AAAA-MM-DD)', fl.fecha);
+  const val = VAL.find(v => v.ref === ref);
+
+  const fActual = fl ? fl.fecha : (e.c.filas[kNum-1] ? e.c.filas[kNum-1].fecha : todayISO());
+  const fNue = prompt('Nueva fecha del pago (AAAA-MM-DD)', fActual);
   if (fNue===null) return;
-  const mNue = prompt('Nuevo monto total de la cuota en pesos', fl.monto);
+
+  const mActual = fl ? fl.monto : (e.c.filas[kNum-1] ? Math.round(e.c.filas[kNum-1].pago) : 0);
+  const mNue = prompt('Nuevo valor TOTAL de la cuota pagada ($)', mActual);
   if (mNue===null) return;
   const mVal = +mNue || 0;
-  fl.fecha = fNue; fl.monto = mVal;
-  await DB.put('flu', fl);
-  const movs = MOV.filter(m => vivo(m) && m.ref === ref);
+
+  const miMov = movs.find(m => m.r === 'Intereses a favor');
+  const inteActual = miMov ? miMov.valor : (e.c.filas[kNum-1] ? Math.round(e.c.filas[kNum-1].interes) : 0);
+  const inteNue = prompt('Monto abonado a INTERESES ($)', inteActual);
+  if (inteNue===null) return;
+  const inteVal = +inteNue || 0;
+
+  const mtMov = movs.find(m => m.tipo==='traslado');
+  const destActual = mtMov ? mtMov.a : (p.bolsa || 'Caja');
+  const destNue = prompt('Bolsa que recibió la cuota (destino)', destActual);
+  if (destNue===null) return;
+
+  if (fl){ fl.fecha = fNue; fl.monto = mVal; await DB.put('flu', fl); }
+  if (val){ val.fecha = fNue; await DB.put('val', val); }
+
   for (const m of movs){
     m.fecha = fNue; m.dt = fNue + 'T12:00'; m.ym = fNue.slice(0,7);
-    if (m.tipo === 'traslado'){ m.deOrig = mVal; m.aOrig = mVal; m.valor = mVal; }
+    if (m.tipo === 'traslado'){
+      m.a = destNue;
+      m.deOrig = mVal; m.aOrig = mVal; m.valor = mVal;
+    } else {
+      m.valorOrig = inteVal; m.valor = inteVal;
+    }
     await DB.put('mov', m);
   }
-  const val = VAL.find(v => v.ref === ref);
-  if (val){ val.fecha = fNue; await DB.put('val', val); }
   prPintar(); render(); autoSave();
-  toast('Cuota ' + kNum + ' actualizada');
+  toast('Cuota ' + kNum + ' del préstamo editada correctamente');
+}
+
+async function editarMov(mInput){
+  let m = typeof mInput === 'string' ? MOV.find(x => x.id === mInput && vivo(x)) : mInput;
+  if (!m){ toast('No se encontró el movimiento', true); return; }
+
+  if (m.ref && m.ref.startsWith('cuo|')){
+    const parts = m.ref.split('|');
+    const pId = parts[1], kNum = +parts[2];
+    const p = PRE.find(x => x.id === pId);
+    if (p){ prEditarCuota(p, kNum); return; }
+  }
+
+  const fNue = prompt('Fecha del movimiento (AAAA-MM-DD)', m.fecha);
+  if (fNue === null) return;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(fNue)){ toast('Fecha inválida', true); return; }
+
+  const cur = m.moneda || 'COP';
+  const valActual = m.valorOrig != null ? m.valorOrig : m.valor;
+  const vNue = prompt('Monto del movimiento en ' + cur, valActual);
+  if (vNue === null) return;
+  const vVal = +vNue || 0;
+
+  if (m.tipo === 'traslado'){
+    const obsNue = prompt('Observación / Nota del traslado', m.obs || '');
+    if (obsNue === null) return;
+    m.fecha = fNue;
+    m.dt = fNue + 'T12:00';
+    m.ym = fNue.slice(0, 7);
+    m.deOrig = vVal;
+    m.aOrig = vVal;
+    m.valor = vVal;
+    m.obs = obsNue;
+    m.ts = Date.now();
+  } else {
+    const rubNue = prompt('Rubro del movimiento', m.r);
+    if (rubNue === null) return;
+
+    const bolNue = prompt('Bolsa o cuenta', m.bolsa);
+    if (bolNue === null) return;
+
+    const obsNue = prompt('Observación / Nota', m.obs || '');
+    if (obsNue === null) return;
+
+    m.fecha = fNue;
+    m.dt = fNue + 'T12:00';
+    m.ym = fNue.slice(0, 7);
+    m.r = rubNue;
+    m.bolsa = bolNue;
+    m.valorOrig = vVal;
+    m.valor = Math.round(vVal * trmDe(cur));
+    m.obs = obsNue;
+    m.ts = Date.now();
+  }
+
+  await DB.put('mov', m);
+  render(); autoSave();
+  toast('Movimiento actualizado');
+}
+
+async function limpiarDuplicadosTrii(){
+  armarBolsas();
+  const triiBolsas = BOLSAS.filter(b => /trii/i.test(b.b) || /trii/i.test(b.alias||''));
+  if (!triiBolsas.length){ toast('No se encontraron bolsillos de Trii', true); return; }
+  
+  const principal = triiBolsas.find(b => !b.padre) || triiBolsas[0];
+  const secundarias = triiBolsas.filter(b => b.b !== principal.b);
+  
+  if (!secundarias.length){ toast('Trii no tiene bolsillos duplicados', true); return; }
+  
+  if (!confirm(`Se encontraron ${secundarias.length} bolsillos/cuentas asociadas a Trii:\n` +
+               secundarias.map(s => '· ' + nomB(s.b)).join('\n') +
+               `\n\n¿Deseas agruparlas como bolsillos dependientes de "${nomB(principal.b)}"?`)) return;
+               
+  const ed = {...(CFG.bolsasEdit||{})};
+  for (const s of secundarias){
+    ed[s.b] = {...(ed[s.b]||{}), padre: principal.b};
+  }
+  await setCfg('bolsasEdit', ed);
+  armarBolsas(); renderSaldos(); render(); autoSave();
+  toast(`Bolsillos de Trii agrupados bajo ${nomB(principal.b)}`);
 }
 
 function prCopiar(p, e){
@@ -6284,6 +6387,7 @@ $$('#segAct .seg').forEach(b=>b.onclick = () => {
 });
 
 /* ---------- pensión: botones y listas ---------- */
+const blt = $$real('#btnLimpiarTrii'); if (blt) blt.onclick = limpiarDuplicadosTrii;
 $('#btnPreNuevo').onclick = () => preAbrir();
 $('#dvCancel').onclick = () => { $('#dvd').style.display='none'; };
 $('#dvOk').onclick = dvGuardar;
