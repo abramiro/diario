@@ -69,17 +69,20 @@ section.on{display:block;animation:fi .15s ease}
   font-weight:600;padding-right:76px}
 /* El avatar vive en la esquina, encima del círculo decorativo. Las dos
    primeras líneas de texto le dejan sitio para que nunca se pisen. */
-.hero2 .ava{position:absolute;top:14px;right:14px;width:70px;z-index:2;text-align:center}
-.hero2 .ava .fig{height:56px}
-.hero2 .ava svg{width:56px;height:56px;display:block;margin:0 auto}
-.hero2 .ava .et{font-size:9.5px;font-weight:700;letter-spacing:.06em;
-  text-transform:uppercase;margin-top:2px;line-height:1.2}
-.hero2 .ava.fiesta{color:var(--acc2)}
-.hero2 .ava.austero{color:var(--warn)}
-.hero2 .ava.casita{color:var(--ok)}
-.hero2 .ava .et{color:currentColor}
-@media(max-width:340px){ .hero2 .ava{width:56px} .hero2 .ava svg{width:46px;height:46px}
-  .hero2 .ava .fig{height:46px} .hero2 .k{padding-right:62px} }
+.hero2 .ava{position:absolute;top:12px;right:12px;width:76px;z-index:2;text-align:center;
+  background:rgba(26,32,44,0.75);backdrop-filter:blur(8px);border:1px solid var(--line2);
+  border-radius:14px;padding:6px 4px 5px;box-shadow:0 4px 12px rgba(0,0,0,0.3);
+  transition:transform .2s ease, border-color .2s ease}
+.hero2 .ava:hover{transform:scale(1.04)}
+.hero2 .ava .fig{height:42px;display:flex;align-items:center;justify-content:center}
+.hero2 .ava svg{width:38px;height:38px;display:block;margin:0 auto;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.4))}
+.hero2 .ava .et{font-size:8.5px;font-weight:750;letter-spacing:.06em;
+  text-transform:uppercase;margin-top:3px;line-height:1.1;color:currentColor}
+.hero2 .ava.fiesta{color:#a78bfa;border-color:rgba(167,139,250,0.45);background:rgba(139,107,255,0.12)}
+.hero2 .ava.austero{color:#fbbf24;border-color:rgba(251,191,36,0.45);background:rgba(245,181,68,0.12)}
+.hero2 .ava.casita{color:#34d399;border-color:rgba(52,211,153,0.45);background:rgba(55,211,153,0.12)}
+@media(max-width:340px){ .hero2 .ava{width:64px} .hero2 .ava svg{width:32px;height:32px}
+  .hero2 .ava .fig{height:34px} .hero2 .k{padding-right:62px} }
 .hero2 .n{font-size:36px;font-weight:690;letter-spacing:-.035em;line-height:1.05;margin:6px 0 2px;
   font-variant-numeric:tabular-nums}
 .hero2 .c{font-size:13px;color:var(--tx2);padding-right:76px}
@@ -2458,36 +2461,25 @@ function padCupo(){
    cupo con monedas está encendido, manda el menor de los dos.
    ================================================================= */
 const AVA_SVG = {
-  fiesta: `<svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2.3"
-      stroke-linecap="round" stroke-linejoin="round">
-    <circle cx="32" cy="37" r="14"/>
-    <path d="M22 24.5 32 10l10 14.5"/>
-    <circle cx="32" cy="8" r="2.6" fill="currentColor" stroke="none"/>
-    <rect x="19" y="31" width="11" height="8.5" rx="3.5" fill="currentColor" stroke="none"/>
-    <rect x="34" y="31" width="11" height="8.5" rx="3.5" fill="currentColor" stroke="none"/>
-    <path d="M30 34.5h4"/>
-    <path d="M19 34.5l-4 1.5M45 34.5l4 1.5"/>
-    <path d="M25.5 44.5c3 3.6 10 3.6 13 0"/>
-    <path d="M7 30l3.5-1.5M57 30l-3.5-1.5M9 45l3.5 1M55 45l-3.5 1"/>
+  fiesta: `<svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M22 46l10-24 10 24" />
+    <path d="M16 28l-4-4M48 28l4-4M32 14v-6" />
+    <path d="M26 38h12" />
+    <circle cx="32" cy="18" r="3" fill="currentColor" />
+    <path d="M12 50c4 3 10 4 20 4s16-1 20-4" />
+    <path d="M20 18l-3-5M44 18l3-5" />
   </svg>`,
-  austero: `<svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2.3"
-      stroke-linecap="round" stroke-linejoin="round">
-    <circle cx="32" cy="26" r="14"/>
-    <path d="M26 23h.01M38 23h.01"/>
-    <path d="M27 32h10"/>
-    <path d="M19 47h16v8a5 5 0 0 1-5 5h-6a5 5 0 0 1-5-5z"/>
-    <path d="M35 49h3.5a3.5 3.5 0 0 1 0 7H35"/>
-    <path d="M24 43c0-2.5 2.5-2.5 2.5-5M30 43c0-2.5 2.5-2.5 2.5-5"/>
+  austero: `<svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M32 8l18 8v16c0 14-10 22-18 24C24 54 14 46 14 32V16l18-8z" />
+    <circle cx="32" cy="28" r="7" />
+    <path d="M32 24v8M28 28h8" />
+    <path d="M24 42c3 2 13 2 16 0" />
   </svg>`,
-  casita: `<svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2.3"
-      stroke-linecap="round" stroke-linejoin="round">
-    <path d="M45 15h6v9"/>
-    <path d="M48 11c0-3 3-3 3-6M54 11c0-3 3-3 3-6"/>
-    <path d="M5 31 32 9l27 22"/>
-    <path d="M12 28v27h40V28"/>
-    <circle cx="32" cy="40" r="10"/>
-    <path d="M28.5 37.5h.01M35.5 37.5h.01"/>
-    <path d="M28 43.5c2.2 2.5 5.8 2.5 8 0"/>
+  casita: `<svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M8 28L32 10l24 18" />
+    <path d="M14 24v26a4 4 0 004 4h28a4 4 0 004-4V24" />
+    <path d="M28 54V36a4 4 0 014-4h0a4 4 0 014 4v18" />
+    <circle cx="44" cy="20" r="3" fill="currentColor" />
   </svg>`
 };
 const AVA_ET = {fiesta:'Modo fiesta', austero:'Plan austero', casita:'Plan casita'};
@@ -2806,12 +2798,28 @@ function prPintar(){
     </div>`}
     ${!bor && preCuotasPagas(p)>0 ? `<button class="primary gray" id="prDeshacerBtn"
       style="margin-bottom:8px;color:var(--warn)">Deshacer la última cuota (${preCuotasPagas(p)})</button>`:''}
+    <button class="primary gray" id="prCorreo" style="margin-bottom:8px">Enviar estado por correo</button>
     <button class="primary gray" id="prPdfPlan" style="margin-bottom:8px">Plan de pagos en PDF</button>
     ${bor?'':'<button class="primary gray" id="prPdfEdo" style="margin-bottom:8px">Estado de cuenta en PDF</button>'}
     <button class="primary gray" id="prCopiar" style="margin-bottom:8px">Copiar estado para el deudor</button>
     <button class="primary gray" id="prEditar" style="margin-bottom:8px">Editar condiciones</button>
+    ${!bor && preCuotasPagas(p)>0 ? `<div class="card"><h3>Cuotas pagadas</h3>
+      ${(()=> {
+        let rows = '';
+        for (let i=1; i<=preCuotasPagas(p); i++){
+          const f = e.c.filas[i-1];
+          rows += `<div class="f" style="margin-bottom:6px;font-size:12.5px">
+            <span>Cuota ${i} (${fCorta(f.fecha)})</span>
+            <span class="mono">${money(Math.round(f.pago))}</span>
+            <button class="chipbtn" style="padding:2px 8px;font-size:11px" onclick="prEditarCuota(PRA.p, ${i})">Editar</button>
+          </div>`;
+        }
+        return rows;
+      })()}</div>` : ''}
     <div class="card"><h3>Cuadro completo</h3>${prTabla(e.c)}</div>`;
   $('#prCopiar').onclick = () => prCopiar(p, e);
+  const cor = $$real('#prCorreo');
+  if (cor) cor.onclick = () => prEnviarCorreo(p, e);
   $('#prEditar').onclick = () => { PRA.modo='editar'; prPintar(); };
   $('#prPdfPlan').onclick = () => prImprimir(p, 'plan');
   const dh = $$real('#prDeshacerBtn');
@@ -2874,6 +2882,12 @@ async function prEjecutar(p, x, armar){
     }
   }
   p.bolsa = bolsa;
+  if (!RB[p.n]){
+    const rub = {n:p.n, cat:'Prestado', nat:'Comprometido', pto:0, med6:0, med12:0, cv:null,
+      n12:0, tend:null, a:[0,0,0,0], anual:0, uso:1, bolsa, aviso:'', nuevo:true};
+    S.rubros.unshift(rub); RB[p.n]=rub;
+    await DB.put('cfg',{k:'rubrosExtra', v:S.rubros.filter(r=>r.nuevo)});
+  }
   if (!p.actId){
     const a = {id:'pre-'+uuid().slice(0,8), n:p.n, tipo:'prestamo', moneda:'COP',
       estado:'abierto', tasaPactada:p.tasa, pct:null, bolsa, hurdle:true,
@@ -2903,10 +2917,6 @@ async function prRegistrarCuota(p, e){
   const inte = Math.round(sig.interes), cap = Math.round(sig.capital);
   const pago = inte + cap;
   const dt = f+'T12:00';
-  /* Tu estructura, la del Excel: el interés se ACREDITA al préstamo
-     (la deuda crece lo que ganó) y la cuota completa SALE del préstamo
-     hacia la bolsa de destino. El neto sobre el préstamo es la
-     amortización, y el destino recibe lo que de verdad entró. */
   const ref = 'cuo|'+p.id+'|'+sig.k;
   const hayBolsa = p.bolsa && BOLSA[p.bolsa];
   if (hayBolsa){
@@ -2919,22 +2929,56 @@ async function prRegistrarCuota(p, e){
       valor:pago, obs:'cuota '+sig.k+' '+p.n, ts:Date.now()};
     MOV.push(mt); await DB.put('mov', mt);
   } else {
-    /* sin bolsa de préstamo: el interés entra directo al destino */
     const mi = {id:uuid(), fecha:f, hora:'12:00', dt, ym:f.slice(0,7), ref,
       r:'Intereses a favor', bolsa:dest, moneda:'COP', valorOrig:inte,
       tasa:1, valor:inte, obs:'interés '+p.n+' · cuota '+sig.k, ts:Date.now()};
     MOV.push(mi); await DB.put('mov', mi);
   }
-  /* 3. el flujo del activo, para la TIR */
   const fl = {id:uuid(), actId:p.actId, fecha:f, tipo:'cuota', ref,
     monto:Math.round(sig.pago), nota:'cuota '+sig.k+' de '+e.c.filas.length, ts:Date.now()};
   FLU.push(fl); await DB.put('flu', fl);
-  /* la valoración del activo baja al saldo del cuadro */
   const rec = {id:uuid(), actId:p.actId, fecha:f, valor:Math.round(sig.fin), ref,
     nota:'saldo según cuadro tras cuota '+sig.k, ts:Date.now()};
   VAL.push(rec); await DB.put('val', rec);
   prPintar(); render(); autoSave();
   toast('Cuota '+sig.k+': '+money(inte)+' de interés + '+money(cap)+' de capital');
+}
+
+function prEnviarCorreo(p, e){
+  const deudor = p.deudor || 'Deudor';
+  const asunto = encodeURIComponent('Estado de Cuenta - Préstamo ' + p.n);
+  const cuerpo = encodeURIComponent(
+    `Hola ${deudor},\n\n` +
+    `Te comparto el estado actualizado de tu préstamo "${p.n}":\n\n` +
+    `· Saldo pendiente: ${money(Math.round(e.saldo))}\n` +
+    `· Cuotas pagadas: ${e.k} de ${e.c.filas.length}\n` +
+    (e.sig ? `· Próxima cuota: ${fCorta(e.sig.fecha)} por ${money(Math.round(e.sig.pago))} (${money(Math.round(e.sig.interes))} interés + ${money(Math.round(e.sig.capital))} capital)\n` : `· Estado: Pagado por completo\n`) +
+    `\n¡Muchas gracias!\n`
+  );
+  window.open(`mailto:?subject=${asunto}&body=${cuerpo}`, '_blank');
+}
+
+async function prEditarCuota(p, kNum){
+  const ref = 'cuo|'+p.id+'|'+kNum;
+  const fl = FLU.find(f => f.ref === ref);
+  if (!fl){ toast('No se encontró la cuota ' + kNum, true); return; }
+  const fNue = prompt('Nueva fecha (AAAA-MM-DD)', fl.fecha);
+  if (fNue===null) return;
+  const mNue = prompt('Nuevo monto total de la cuota en pesos', fl.monto);
+  if (mNue===null) return;
+  const mVal = +mNue || 0;
+  fl.fecha = fNue; fl.monto = mVal;
+  await DB.put('flu', fl);
+  const movs = MOV.filter(m => vivo(m) && m.ref === ref);
+  for (const m of movs){
+    m.fecha = fNue; m.dt = fNue + 'T12:00'; m.ym = fNue.slice(0,7);
+    if (m.tipo === 'traslado'){ m.deOrig = mVal; m.aOrig = mVal; m.valor = mVal; }
+    await DB.put('mov', m);
+  }
+  const val = VAL.find(v => v.ref === ref);
+  if (val){ val.fecha = fNue; await DB.put('val', val); }
+  prPintar(); render(); autoSave();
+  toast('Cuota ' + kNum + ' actualizada');
 }
 
 function prCopiar(p, e){
@@ -3959,6 +4003,12 @@ function valMercado(a){
   if (a.mercado==='BTC' && a.unidades && btcCOP())
     return {valor:a.unidades*btcCOP(), fecha:TASAS.btcFecha||todayISO(),
             nota:'en vivo: '+a.unidades+' BTC x '+money(btcCOP())};
+  if (a.unidades && a.precioUnitario) {
+    const cur = a.moneda || 'COP';
+    const cop = a.unidades * a.precioUnitario * trmDe(cur);
+    return {valor: Math.round(cop), fecha: a.valFecha || todayISO(),
+            nota: a.unidades + ' acciones/títulos x ' + montoEn(cur, a.precioUnitario)};
+  }
   return null;
 }
 
@@ -4141,6 +4191,8 @@ function detalle(id){
   let h = `<div class="card">
     <table>
       <tr><td>Tipo</td><td>${TIPO_NOM[a.tipo]||a.tipo}</td></tr>
+      ${a.unidades?`<tr><td>Acciones / Títulos</td><td class="mono">${a.unidades}</td></tr>`:''}
+      ${a.precioUnitario?`<tr><td>Precio por unidad</td><td class="mono">${montoEn(a.moneda||'COP', a.precioUnitario)}</td></tr>`:''}
       <tr><td>Aportado</td><td class="mono">${money(m.ap)}</td></tr>
       <tr><td>Recibido</td><td class="mono">${money(m.re)}</td></tr>
       <tr><td>Capital expuesto</td><td class="mono">${money(m.expuesto)}</td></tr>
@@ -4155,6 +4207,7 @@ function detalle(id){
     ${m.val?'':`<p class="note" style="margin-top:10px;color:var(--warn)">Sin valoración no hay TIR. Es el único dato que falta.</p>`}
   </div>
   <button class="primary" id="detVal" style="margin-bottom:8px">Actualizar valoración</button>
+  <button class="primary gray" id="detTrii" style="margin-bottom:8px;background:var(--bg3)">🔍 Consultar / Cotizar en Trii (BVC / Broker)</button>
   <button class="primary gray" id="detFlu" style="margin-bottom:14px">Registrar flujo</button>
   <div class="card"><h3>Flujos (${fs.length})</h3><table>`;
   for (const f of [...fs].reverse().slice(0,40)){
@@ -4166,14 +4219,124 @@ function detalle(id){
   h += `</table>${fs.length>40?'<p class="note">Mostrando los 40 más recientes.</p>':''}</div>`;
   $('#detBody').innerHTML = h;
   $('#det').style.display='flex';
+  $('#detTrii').onclick = () => abrirCotizadorTrii(a);
   $('#detVal').onclick = async () => {
-    const v = prompt('Valor actual de '+a.n+' en pesos', m.val?Math.round(m.val.valor):'');
-    if (v===null) return;
+    const modoAcc = confirm('¿Deseas actualizar ingresando el número de acciones/títulos y precio por unidad?\n\nAceptar: Ingresar acciones/títulos y precio unitario.\nCancelar: Ingresar valor total directamente en pesos.');
+    let vTotal = 0, notaVal = 'ingresada a mano';
+    const cur = a.moneda || 'COP';
+    if (modoAcc){
+      const u = prompt('Número de acciones / títulos', a.unidades || '1');
+      if (u===null) return;
+      const pu = prompt('Precio unitario en ' + cur, a.precioUnitario || (m.val ? (m.val.valor/u) : '0'));
+      if (pu===null) return;
+      a.unidades = +u || 0;
+      a.precioUnitario = +pu || 0;
+      vTotal = Math.round(a.unidades * a.precioUnitario * trmDe(cur));
+      notaVal = a.unidades + ' u. x ' + montoEn(cur, a.precioUnitario);
+      await DB.put('act', a);
+    } else {
+      const v = prompt('Valor actual de '+a.n+' en pesos', m.val?Math.round(m.val.valor):'');
+      if (v===null) return;
+      vTotal = +v || 0;
+    }
     const f = prompt('Fecha de la valoración (AAAA-MM-DD)', todayISO()) || todayISO();
-    const rec = {id:uuid(), actId:id, fecha:f, valor:+v||0, nota:'ingresada a mano', ts:Date.now()};
+    a.valFecha = f;
+    await DB.put('act', a);
+    const rec = {id:uuid(), actId:id, fecha:f, valor:vTotal, nota:notaVal, ts:Date.now()};
     VAL.push(rec); await DB.put('val', rec);
+    if (a.bolsa && BOLSA[a.bolsa]){
+      VER[a.bolsa] = {v: vTotal / trmDe(cur), fecha: f};
+      await DB.put('ver', {b:a.bolsa, v: VER[a.bolsa].v, fecha: f});
+    }
     detalle(id); renderAct(); autoSave(); toast('Valoración guardada');
   };
+
+const ACCIONES_TRII = [
+  {s:'ECOPETROL', n:'Ecopetrol S.A. (BVC)', c:'COP', y:'ECOPETROL.CB'},
+  {s:'PFBCOLOM', n:'Bancolombia Preferencial (BVC)', c:'COP', y:'PFBCOLOM.CB'},
+  {s:'BCOLOMBIA', n:'Bancolombia Ordinaria (BVC)', c:'COP', y:'BCOLOMBIA.CB'},
+  {s:'ISA', n:'Interconexión Eléctrica (BVC)', c:'COP', y:'ISA.CB'},
+  {s:'GEB', n:'Grupo Energía Bogotá (BVC)', c:'COP', y:'GEB.CB'},
+  {s:'PFCEMARGOS', n:'Cementos Argos Pref. (BVC)', c:'COP', y:'PFCEMARGOS.CB'},
+  {s:'CEMARGOS', n:'Cementos Argos Ord. (BVC)', c:'COP', y:'CEMARGOS.CB'},
+  {s:'PFGRUPOAV', n:'Grupo Aval Pref. (BVC)', c:'COP', y:'PFGRUPOAV.CB'},
+  {s:'PFGRUPSURA', n:'Grupo Sura Pref. (BVC)', c:'COP', y:'PFGRUPSURA.CB'},
+  {s:'NUTRESA', n:'Grupo Nutresa (BVC)', c:'COP', y:'NUTRESA.CB'},
+  {s:'PFDAVVNDA', n:'Davivienda Pref. (BVC)', c:'COP', y:'PFDAVVNDA.CB'},
+  {s:'CELSIA', n:'Celsia S.A. (BVC)', c:'COP', y:'CELSIA.CB'},
+  {s:'PEI', n:'PEI Inmobiliario (BVC)', c:'COP', y:'PEI.CB'},
+  {s:'NU', n:'Nu Holdings (Mercado Global Trii)', c:'USD', y:'NU'},
+  {s:'AAPL', n:'Apple Inc. (Mercado Global Trii)', c:'USD', y:'AAPL'},
+  {s:'MSFT', n:'Microsoft (Mercado Global Trii)', c:'USD', y:'MSFT'},
+  {s:'AMZN', n:'Amazon (Mercado Global Trii)', c:'USD', y:'AMZN'},
+  {s:'NVDA', n:'NVIDIA Corp. (Mercado Global Trii)', c:'USD', y:'NVDA'},
+  {s:'SPY', n:'SPDR S&P 500 ETF (Mercado Global Trii)', c:'USD', y:'SPY'}
+];
+
+async function buscarCotizacionYahoo(symbol){
+  try {
+    const item = ACCIONES_TRII.find(x=>x.s===symbol) || {y:symbol};
+    const target = item.y;
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(target)}?interval=1d&range=1d`;
+    const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+    const d = await fetchJSON(proxyUrl, 6000);
+    if (d && d.chart && d.chart.result && d.chart.result[0]){
+      const meta = d.chart.result[0].meta;
+      const p = meta.regularMarketPrice || meta.previousClose;
+      if (p) return p;
+    }
+  } catch(e){}
+  return null;
+}
+
+async function abrirCotizadorTrii(a){
+  const opts = ACCIONES_TRII.map((x,i)=>(i+1)+') '+x.s+' — '+x.n).join('\n');
+  const sel = prompt('Elige la acción en Trii / Broker:\n'+opts+'\n\nO escribe el símbolo directo (ej: ECOPETROL, PFBCOLOM, NU, AAPL):', a.ticker || 'ECOPETROL');
+  if (sel===null) return;
+  let item = null;
+  const num = +sel;
+  if (!isNaN(num) && num>=1 && num<=ACCIONES_TRII.length){
+    item = ACCIONES_TRII[num-1];
+  } else {
+    const sym = sel.trim().toUpperCase();
+    item = ACCIONES_TRII.find(x=>x.s===sym) || {s:sym, n:sym, c:'COP', y:sym};
+  }
+  
+  toast('Consultando cotización de ' + item.s + '...');
+  let precio = await buscarCotizacionYahoo(item.s);
+  if (!precio){
+    const pStr = prompt('No se pudo obtener precio automático. Ingresa el precio por acción de ' + item.s + ' en Trii (' + item.c + '):', a.precioUnitario || '0');
+    if (pStr===null) return;
+    precio = +pStr || 0;
+  } else {
+    const pStr = prompt('Cotización obtenida para ' + item.s + ': ' + montoEn(item.c, precio) + '.\nConfirma o modifica el precio unitario:', precio);
+    if (pStr===null) return;
+    precio = +pStr || precio;
+  }
+  
+  const uStr = prompt('¿Cuántas acciones / títulos de ' + item.s + ' tienes en Trii / Broker?', a.unidades || '1');
+  if (uStr===null) return;
+  const u = +uStr || 0;
+  
+  a.ticker = item.s;
+  a.unidades = u;
+  a.precioUnitario = precio;
+  a.moneda = item.c;
+  a.valFecha = todayISO();
+  await DB.put('act', a);
+  
+  const valCOP = Math.round(u * precio * trmDe(item.c));
+  const rec = {id:uuid(), actId:a.id, fecha:todayISO(), valor:valCOP, nota:item.s+' · '+u+' u. x '+montoEn(item.c, precio), ts:Date.now()};
+  VAL.push(rec); await DB.put('val', rec);
+  
+  if (a.bolsa && BOLSA[a.bolsa]){
+    VER[a.bolsa] = {v: valCOP / trmDe(monedaDe(a.bolsa)), fecha: todayISO()};
+    await DB.put('ver', {b:a.bolsa, v: VER[a.bolsa].v, fecha: todayISO()});
+  }
+  
+  detalle(a.id); renderAct(); autoSave();
+  toast('Trii: ' + u + ' acciones de ' + item.s + ' (' + money(valCOP) + ') guardadas');
+}
   $('#detFlu').onclick = async () => {
     const tipos = Object.keys(FLUJO_NOM);
     const t = prompt('Tipo de flujo:\n'+tipos.map((x,i)=>(i+1)+') '+FLUJO_NOM[x]).join('\n'), '3');
@@ -4650,28 +4813,7 @@ const enPesos = (nb, s) => {
   return c === 'COP' ? s : s * trmDe(c);
 };
 
-function renderSaldos(){
-  armarBolsas();
-  const filas = BOLSAS.filter(b=>!b.padre).map(b=>{
-    const s = saldoDe(b.b);
-    const cop = enPesos(b.b, s);
-    const v = VER[b.b];
-    return {...b, s, cop, ver: v ? v.v : null, verF: v ? v.fecha : null,
-            dif: v ? s - v.v : null};
-  }).filter(x => Math.abs(x.s) > 0.5 || x.ver != null);
-
-  const tot = g => filas.filter(x=>x.grupo===g).reduce((a,x)=>a+x.cop,0);
-  const disp = tot('Disponible'), aho = tot('Ahorro e inversión'),
-        pre = tot('Prestado'), deu = tot('Deuda');
-  /* ---- balance consolidado: activos contra pasivos, a la misma escala ---- */
-  const act = disp + aho + pre;
-  const patrimonio = act - deu;
-  const esc = Math.max(act, deu) || 1;
-  const seg = [
-    {k:'a1', n:'Disponible',         v:disp},
-    {k:'a2', n:'Ahorro e inversión', v:aho},
-    {k:'a3', n:'Prestado',           v:pre}
-  ].filter(x=>x.v>0);
+function renderHeaderBalance(act, deu, patrimonio, esc, seg){
   $('#balA').textContent = money(act);
   $('#balP').textContent = money(deu);
   $('#balBarA').innerHTML = seg.map(x=>{
@@ -4690,7 +4832,9 @@ function renderSaldos(){
     : 'Sin deuda registrada.';
   $('#slPat').textContent = money(patrimonio);
   $('#slPat').style.color = patrimonio<0 ? 'var(--bad)' : 'var(--tx)';
+}
 
+function renderLiquidezPanel(disp, aho, pre, act, deu, patrimonio){
   $('#slLiq').textContent = money(disp);
   $('#slLiq').style.color = disp < 0 ? 'var(--bad)' : 'var(--tx)';
   const veces = deu>0 ? disp/deu : null;
@@ -4706,7 +4850,9 @@ function renderSaldos(){
     <tr><td><b>Activos</b></td><td class="mono"><b>${money(act)}</b></td></tr>
     <tr><td>Deudas</td><td class="mono" style="color:var(--bad)">−${money(deu)}</td></tr>
     <tr class="tot"><td>Patrimonio neto</td><td class="mono">${money(patrimonio)}</td></tr></table>`;
+}
 
+function renderBolsasJerarquia(filas, tot){
   const fila = (x, sub) => {
     const cur = x.moneda!=='COP';
     const sm = semaforo(x.b);
@@ -4736,6 +4882,34 @@ function renderSaldos(){
     return `<div class="sl-g">${g}<span class="mono">${money(tot(g))}</span></div>`
       + sub.map(x=>fila(x,false)).join('');
   }).join('');
+}
+
+function renderSaldos(){
+  armarBolsas();
+  const filas = BOLSAS.filter(b=>!b.padre).map(b=>{
+    const s = saldoDe(b.b);
+    const cop = enPesos(b.b, s);
+    const v = VER[b.b];
+    return {...b, s, cop, ver: v ? v.v : null, verF: v ? v.fecha : null,
+            dif: v ? s - v.v : null};
+  }).filter(x => Math.abs(x.s) > 0.5 || x.ver != null);
+
+  const tot = g => filas.filter(x=>x.grupo===g).reduce((a,x)=>a+x.cop,0);
+  const disp = tot('Disponible'), aho = tot('Ahorro e inversión'),
+        pre = tot('Prestado'), deu = tot('Deuda');
+  const act = disp + aho + pre;
+  const patrimonio = act - deu;
+  const esc = Math.max(act, deu) || 1;
+  const seg = [
+    {k:'a1', n:'Disponible',         v:disp},
+    {k:'a2', n:'Ahorro e inversión', v:aho},
+    {k:'a3', n:'Prestado',           v:pre}
+  ].filter(x=>x.v>0);
+
+  renderHeaderBalance(act, deu, patrimonio, esc, seg);
+  renderLiquidezPanel(disp, aho, pre, act, deu, patrimonio);
+  renderBolsasJerarquia(filas, tot);
+
   const _c=$$real('#slCorte'); if(_c) _c.textContent = SS.corte;
   renderConcil();
 }
@@ -5772,6 +5946,12 @@ function bsaPintar(){
     if (t==='') { toast('Escribí un valor', true); return; }
     VER[nb] = {v:+t||0, fecha:todayISO()};
     await DB.put('ver', {b:nb, ...VER[nb]});
+    const act = actDeBolsa(nb);
+    if (act){
+      const valCOP = Math.round((+t||0) * trmDe(cur));
+      const rec = {id:uuid(), actId:act.id, fecha:todayISO(), valor:valCOP, nota:'sincronizado desde verificación de bolsa', ts:Date.now()};
+      VAL.push(rec); await DB.put('val', rec);
+    }
     bsaPintar(); renderSaldos(); autoSave();
     const d = saldoPropio(nb) - VER[nb].v;
     toast(Math.abs(d)<1 ? nomB(nb)+' cuadra' : 'Diferencia de '+montoEn(cur,d), Math.abs(d)>=1);
