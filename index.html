@@ -1247,7 +1247,7 @@ input[type=text],input[type=number],input[type=date],select{
   <div id="padMedio">
   <div class="lbl mono" id="padConv" style="text-align:right;margin:-4px 0 8px;color:var(--warn);display:none"></div>
   <div class="lbl" id="padCupo" style="text-align:right;margin:-2px 0 8px;display:none"></div>
-  <div class="meta" id="padBolsas"></div>
+  <div id="padBolsas" style="margin-bottom:10px"></div>
   <input type="datetime-local" id="padDT" style="display:none;width:100%;max-width:none;
     margin-bottom:10px;background:var(--bg2);border:1px solid var(--acc);border-radius:12px;
     padding:12px 14px;color:var(--tx);font-size:15px">
@@ -1547,7 +1547,7 @@ input[type=text],input[type=number],input[type=date],select{
 <div id="toast"></div>
 <script>
 'use strict';
-const VERSION = '2026.08.02-03';   /* subí esto en cada cambio publicado */
+const VERSION = '2026.08.02-04';   /* subí esto en cada cambio publicado */
 /* ===================================================================
    Diario · Presupuesto — PWA local-first
    Los datos viven en IndexedDB en este dispositivo. Nada sale de acá
@@ -1931,18 +1931,41 @@ function openPad(r){
   const lista = BOLSAS
     .filter(b => usadas.has(b.b) || b.padre || b.grupo==='Disponible' || esPadre(b.b))
     .sort((a,b)=>peso(a)-peso(b));
-  $('#padBolsas').innerHTML = lista.map(b => {
+  const top3 = lista.slice(0, 3);
+  const resto = lista.slice(3).sort((a,b)=>nomB(a.b).localeCompare(nomB(b.b),'es'));
+
+  const btnHtml = top3.map(b => {
     const cur = monedaDe(b.b);
-    return `<button class="chipbtn${b.b===pad.bolsa?' on':''}" data-b="${b.b}">`
+    return `<button type="button" class="chipbtn${b.b===pad.bolsa?' on':''}" data-b="${b.b}" style="flex:1;min-width:0;justify-content:center;text-align:center;padding:8px 4px;font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">`
       + (b.padre ? `<em style="font-style:normal;opacity:.5">${nomB(b.padre)} · </em>` : '')
       + nomB(b.b)
       + (esPadre(b.b) ? ' <em style="font-style:normal;opacity:.4;font-size:10px">·m</em>' : '')
       + (cur!=='COP' ? ` <b style="color:var(--warn)">${simbolo(cur)}</b>` : '')
       + `</button>`;
   }).join('');
-  /* la fila se desplaza de lado: hay que traer la bolsa activa a la vista */
-  const act = $$real('#padBolsas .chipbtn.on');
-  if (act && act.scrollIntoView) act.scrollIntoView({block:'nearest', inline:'center'});
+
+  const dropHtml = resto.length ? `<select id="padBolsaDrop" style="width:100%;padding:8px 12px;font-size:13px;background:var(--bg2);border:1px solid var(--line);border-radius:10px;color:var(--tx);margin-top:6px">
+    <option value="">Otras bolsas (${resto.length})…</option>
+    ${resto.map(b=>{
+      const cur = monedaDe(b.b);
+      const sel = b.b === pad.bolsa ? ' selected' : '';
+      return `<option value="${b.b}"${sel}>${b.padre?nomB(b.padre)+' · ':''}${nomB(b.b)}${esPadre(b.b)?' (madre)':''}${cur!=='COP'?' ('+cur+')':''}</option>`;
+    }).join('')}
+  </select>` : '';
+
+  $('#padBolsas').innerHTML = `<div style="display:flex;gap:6px">${btnHtml}</div>` + dropHtml;
+
+  const dropEl = $$real('#padBolsaDrop');
+  if (dropEl){
+    dropEl.onchange = e => {
+      const b = e.target.value;
+      if (b){
+        pad.bolsa = b;
+        $$('#padBolsas .chipbtn').forEach(x=>x.classList.toggle('on', x.dataset.b===b));
+        drawAmt();
+      }
+    };
+  }
   drawAmt();
   $('#pad').classList.add('on');
 }
@@ -6503,7 +6526,10 @@ $('#pad').onclick = e => {
   const k=e.target.dataset.k, b=e.target.dataset.b;
   if (k) key(k);
   if (b){ pad.bolsa=b; $$('#padBolsas .chipbtn').forEach(x=>
-    x.classList.toggle('on', x.dataset.b===b)); drawAmt(); }
+    x.classList.toggle('on', x.dataset.b===b));
+    const sel = $$real('#padBolsaDrop');
+    if (sel) sel.value = '';
+    drawAmt(); }
 };
 $('#padFechas').onclick = e => {
   const b=e.target.closest('[data-f]'); if(!b) return;
