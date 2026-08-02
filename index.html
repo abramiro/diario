@@ -1543,7 +1543,7 @@ input[type=text],input[type=number],input[type=date],select{
 <div id="toast"></div>
 <script>
 'use strict';
-const VERSION = '2026.07.31-11';   /* subí esto en cada cambio publicado */
+const VERSION = '2026.08.02-01';   /* subí esto en cada cambio publicado */
 /* ===================================================================
    Diario · Presupuesto — PWA local-first
    Los datos viven en IndexedDB en este dispositivo. Nada sale de acá
@@ -1601,7 +1601,7 @@ function montoEn(cur, n){
 }
 
 /* ---------- estado ---------- */
-let MOV=[], PTO={}, OBJ=[], CFG={...CFG_DEF}, FH=null;
+let MOV=[], PTO={}, PTO_TS={}, OBJ=[], CFG={...CFG_DEF}, FH=null;
 let view='home', ym=null, pad={r:null,v:'',bolsa:null,dt:null};
 
 /* ---------- utilidades ---------- */
@@ -1903,20 +1903,26 @@ function openPad(r){
   padCupo();
   /* la bolsa manda la moneda: se marca cuál no está en pesos */
   armarBolsas();
-  /* orden: primero las más usadas según la historia, luego sus bolsillos */
+  /* orden: primero las más usadas según movimientos reales */
+  const freq = {};
+  for (const m of MOV) if (vivo(m) && m.bolsa) freq[m.bolsa] = (freq[m.bolsa]||0) + 1;
   const rank = {}; S.bolsas.forEach((b,i)=>rank[b]=i);
-  const peso = b => b.padre != null
-    ? (rank[b.padre] ?? 90) + 0.5
-    : (rank[b.b] ?? 99);
+  const peso = b => {
+    const f = freq[b.b] || 0;
+    if (f > 0) return -f;                /* más usada primero */
+    if (b.padre != null) return (rank[b.padre] ?? 90) + 0.5;
+    return (rank[b.b] ?? 99);
+  };
   const usadas = new Set([...S.bolsas, ...Object.keys(S.monedaBolsa)]);
   const lista = BOLSAS
-    .filter(b=>!esPadre(b.b) && (usadas.has(b.b) || b.padre || b.grupo==='Disponible'))
+    .filter(b => usadas.has(b.b) || b.padre || b.grupo==='Disponible' || esPadre(b.b))
     .sort((a,b)=>peso(a)-peso(b));
   $('#padBolsas').innerHTML = lista.map(b => {
     const cur = monedaDe(b.b);
     return `<button class="chipbtn${b.b===pad.bolsa?' on':''}" data-b="${b.b}">`
       + (b.padre ? `<em style="font-style:normal;opacity:.5">${nomB(b.padre)} · </em>` : '')
       + nomB(b.b)
+      + (esPadre(b.b) ? ' <em style="font-style:normal;opacity:.4;font-size:10px">·m</em>' : '')
       + (cur!=='COP' ? ` <b style="color:var(--warn)">${simbolo(cur)}</b>` : '')
       + `</button>`;
   }).join('');
@@ -3949,7 +3955,10 @@ function renderCfg(){
     const ov = PTO[r.n+'|'+ym];
     return `<div class="f" style="margin-bottom:7px">
       <label style="font-size:13px">${r.n}
-        <span style="color:var(--tx3);font-size:11px"> · ${r.nat}</span></label>
+        <select data-nat="${r.n}" style="font-size:10px;padding:2px 4px;margin-left:4px;
+          background:var(--bg3);border:1px solid var(--line);border-radius:6px;color:var(--tx3)">
+          ${NAT_PTO.map(n=>`<option${n===r.nat?' selected':''}>${n}</option>`).join('')}
+        </select></label>
       <input type="number" step="any" data-pto="${r.n}"
         placeholder="${nf.format(r.pto)}" value="${ov!=null?ov:''}"></div>`;
   }).join('');
@@ -3990,7 +3999,7 @@ async function setCfg(k,v){ CFG[k]=v; await DB.put('cfg',{k,v}); }
 /* =================== sincronización =================== */
 function snapshot(){
   return { v:1, app:'diario-presupuesto', exportedAt:new Date().toISOString(),
-    mov:MOV, pto:Object.entries(PTO).map(([k,v])=>({k,v,ts:0})), obj:OBJ,
+    mov:MOV, pto:Object.entries(PTO).map(([k,v])=>({k,v,ts:PTO_TS[k]||0})), obj:OBJ,
     act:ACT, flu:FLU, val:VAL, pen:PEN, pre:PRE,
     ver:Object.entries(VER).map(([b,x])=>({b,...x})) };
 }
@@ -4049,7 +4058,14 @@ async function fusionar(data, silencio){
     /* una baja gana siempre: si cualquiera de los dos lados lo borró, queda borrado */
     if (m.borrado && !mio.borrado){ mio.borrado = m.borrado; await DB.put('mov', mio); bajas++; }
   }
-  for (const p of (data.pto||[])) if (p.v!=null){ PTO[p.k]=p.v; await DB.put('pto',{k:p.k,v:p.v,ts:p.ts||0}); }
+  for (const p of (data.pto||[])){
+    if (p.v==null) continue;
+    const tsLocal = PTO_TS[p.k] || 0;
+    if ((p.ts||0) >= tsLocal){
+      PTO[p.k]=p.v; PTO_TS[p.k]=p.ts||0;
+      await DB.put('pto',{k:p.k,v:p.v,ts:p.ts||0});
+    }
+  }
   const oid = new Set(OBJ.map(o=>o.id));
   for (const o of (data.obj||[])){
     if (!oid.has(o.id)){ OBJ.push(o); await DB.put('obj',o); }
@@ -4929,11 +4945,13 @@ function wizPintar(){
 
 async function wizFijar(v){
   const it = WZ.lista[WZ.i];
-  if (v !== null && Math.round(v) !== it.act){
+  if (v !== null){
     const k = it.r+'|'+ym;
-    PTO[k] = Math.round(v);
-    await DB.put('pto', {k, v:Math.round(v), ts:Date.now()});
-    WZ.cambios.push({r:it.r, de:it.act, a:Math.round(v)});
+    const ts = Date.now();
+    PTO[k] = Math.round(v); PTO_TS[k] = ts;
+    await DB.put('pto', {k, v:Math.round(v), ts});
+    if (Math.round(v) !== it.act)
+      WZ.cambios.push({r:it.r, de:it.act, a:Math.round(v)});
   }
   WZ.i++; wizPintar(); autoSave();
 }
@@ -5062,9 +5080,9 @@ function deltaLocal(nb, hasta){
 const saldoPropio = (nb, hasta) => (BOLSA[nb] ? BOLSA[nb].saldo : 0) + deltaLocal(nb, hasta);
 const saldoDe = nb => {
   const hs = hijos(nb);
-  /* si tiene bolsillos, el saldo del padre es la SUMA de los hijos; no se
-     agrega saldoPropio del padre porque eso ya está distribuido */
-  if (hs.length) return hs.reduce((s,h) => s + saldoPropio(h.b), 0);
+  /* si tiene bolsillos, el saldo del padre es su propio saldo (plata sin
+     asignar a ningún bolsillo) más la suma de los hijos */
+  if (hs.length) return saldoPropio(nb) + hs.reduce((s,h) => s + saldoPropio(h.b), 0);
   return saldoPropio(nb);
 };
 const enPesos = (nb, s) => {
@@ -5128,12 +5146,20 @@ function renderBolsasJerarquia(filas, tot){
             : sm.et+' · '+money(sm.dif)}</em>` : ''}</div>
         <div class="sl-v mono">${money(x.cop)}</div>
       </div>`
-      + (hs.length && abierta ? hs.map(h=>{
-          const sp = saldoPropio(h.b);
-          return fila({...h, s:sp, cop:enPesos(h.b,sp),
-                       ver:(VER[h.b]||{}).v ?? null, verF:(VER[h.b]||{}).fecha,
-                       dif: VER[h.b]!=null ? sp-VER[h.b].v : null}, true);
-        }).join('') : '');
+      + (hs.length && abierta ? (()=>{
+          const madreS = saldoPropio(x.b);
+          const filaM = Math.abs(madreS) > 0.5
+            ? `<div class="sl-r sub" data-b="${x.b}">
+                <div class="sl-n" style="color:var(--tx3)">Sin asignar</div>
+                <div class="sl-v mono" style="color:var(--tx3)">${money(enPesos(x.b,madreS))}</div>
+              </div>` : '';
+          return filaM + hs.map(h=>{
+              const sp = saldoPropio(h.b);
+              return fila({...h, s:sp, cop:enPesos(h.b,sp),
+                           ver:(VER[h.b]||{}).v ?? null, verF:(VER[h.b]||{}).fecha,
+                           dif: VER[h.b]!=null ? sp-VER[h.b].v : null}, true);
+            }).join('');
+        })() : '');
   };
   $('#slList').innerHTML = GRUPOS.map(g=>{
     const sub = filas.filter(x=>x.grupo===g).sort((a,b)=>b.cop-a.cop);
@@ -6653,12 +6679,24 @@ $('#fileIn').onchange = async e => {
   catch(err){ toast(err.message||'No se pudo leer el archivo', true); }
   e.target.value='';
 };
-$('#cfPto').onchange = async e => {
+$('#cfPto').oninput = async e => {
   const r = e.target.dataset.pto; if(!r) return;
   const k = r+'|'+ym, v = e.target.value===''? null : +e.target.value;
-  if (v===null){ delete PTO[k]; await DB.del('pto',k); }
-  else { PTO[k]=v; await DB.put('pto',{k, v, ts:Date.now()}); }
-  toast('Presupuesto de '+r+' actualizado'); autoSave();
+  if (v===null){ delete PTO[k]; delete PTO_TS[k]; await DB.del('pto',k); }
+  else { const ts=Date.now(); PTO[k]=v; PTO_TS[k]=ts; await DB.put('pto',{k, v, ts}); }
+  clearTimeout(e.target._t);
+  e.target._t = setTimeout(()=>{ toast('Presupuesto de '+r+' actualizado'); autoSave(); }, 600);
+};
+$('#cfPto').onchange = async e => {
+  const r = e.target.dataset.nat; if(!r) return;
+  const nat = e.target.value;
+  if (!RB[r]) return;
+  RB[r].nat = nat;
+  const ed = {...(CFG.rubrosNatEdit||{})};
+  ed[r] = nat;
+  await setCfg('rubrosNatEdit', ed);
+  render(); autoSave();
+  toast(r+' ahora es '+nat);
 };
 $('#nrCat').onchange = async e => {
   if (e.target.value !== '__nueva__') return;
@@ -6784,6 +6822,12 @@ async function boot(){
     try { if (r && r.n && !RB[r.n]){ S.rubros.unshift(r); RB[r.n]=r; } }
     catch(e){ console.error('rubro extra inválido', r, e); }
   }
+  /* aplicar ediciones de naturaleza (local por dispositivo) */
+  if (hayDatos() && CFG.rubrosNatEdit){
+    for (const [n, nat] of Object.entries(CFG.rubrosNatEdit)){
+      if (RB[n] && NAT_PTO.includes(nat)) RB[n].nat = nat;
+    }
+  }
   MOV = await DB.all('mov');
   /* activos: la semilla se carga una vez; después manda lo que hay en la base */
   ACT = await DB.all('act'); FLU = await DB.all('flu'); VAL = await DB.all('val');
@@ -6796,7 +6840,7 @@ async function boot(){
     for (const x of FLU) await DB.put('flu', x);
     for (const x of VAL) await DB.put('val', x);
   }
-  (await DB.all('pto')).forEach(p=>PTO[p.k]=p.v);
+  (await DB.all('pto')).forEach(p=>{ PTO[p.k]=p.v; PTO_TS[p.k]=p.ts||0; });
   OBJ = await DB.all('obj');
   (await DB.all('ver')).forEach(v=>VER[v.b]={v:v.v, fecha:v.fecha});
   const fh = await DB.get('fs','handle');
