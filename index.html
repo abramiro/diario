@@ -1122,6 +1122,16 @@ input[type=text],input[type=number],input[type=date],select{
     <button class="primary" id="btnNomGuardar" style="margin-top:10px">Guardar Plantilla de Nómina</button>
   </div>
 
+  <div class="card" id="cfFacturasCard">
+    <div class="f" style="margin-bottom:8px">
+      <h3 style="flex:1;margin:0">Facturas de Servicios (JSON OneDrive)</h3>
+      <button class="chipbtn on" id="btnImpFacturas">Subir JSON</button>
+    </div>
+    <input type="file" id="fileFacturas" accept=".json" style="display:none">
+    <p class="note" style="margin-bottom:12px">Fechas de vencimiento y montos de facturas de servicios públicos y telefonía generados por el agente externo.</p>
+    <div id="cfFacturasBody"></div>
+  </div>
+
   <div class="card">
     <h3>Monedas</h3>
     <p class="note" style="margin-bottom:12px">Tres bolsas no están en pesos:
@@ -1631,13 +1641,94 @@ function getCfgNomina(){
   return DEFAULT_NOMINA;
 }
 
+/* ---------- cálculo de días hábiles y festivos en Colombia ---------- */
+function calcularPascua(year){
+  const a = year % 19, b = Math.floor(year / 100), c = year % 100;
+  const d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const month = Math.floor((h + l - 7 * m + 114) / 31);
+  const day = ((h + l - 7 * m + 114) % 31) + 1;
+  return new Date(year, month - 1, day);
+}
+
+function moverLunes(fecha){
+  const day = fecha.getDay();
+  if (day === 1) return fecha;
+  const diff = (8 - day) % 7;
+  const res = new Date(fecha);
+  res.setDate(res.getDate() + diff);
+  return res;
+}
+
+function festivosCO(year){
+  const list = [];
+  const addF = d => list.push(d.toISOString().slice(0,10));
+  addF(new Date(year, 0, 1));
+  addF(new Date(year, 4, 1));
+  addF(new Date(year, 6, 20));
+  addF(new Date(year, 7, 7));
+  addF(new Date(year, 11, 8));
+  addF(new Date(year, 11, 25));
+  addF(moverLunes(new Date(year, 0, 6)));
+  addF(moverLunes(new Date(year, 2, 19)));
+  addF(moverLunes(new Date(year, 5, 29)));
+  addF(moverLunes(new Date(year, 7, 15)));
+  addF(moverLunes(new Date(year, 9, 12)));
+  addF(moverLunes(new Date(year, 10, 1)));
+  addF(moverLunes(new Date(year, 10, 11)));
+  const pascua = calcularPascua(year);
+  const addRel = offset => {
+    const d = new Date(pascua);
+    d.setDate(d.getDate() + offset);
+    addF(d);
+  };
+  addRel(-3); addRel(-2); addRel(43); addRel(64); addRel(71);
+  return list;
+}
+
+const FESTIVOS_CACHE = {};
+function esFestivoCO(fechaStr){
+  const y = +fechaStr.slice(0,4);
+  if (!FESTIVOS_CACHE[y]) FESTIVOS_CACHE[y] = festivosCO(y);
+  return FESTIVOS_CACHE[y].includes(fechaStr.slice(0,10));
+}
+
+function esDiaHabil(fechaStr){
+  const d = new Date(fechaStr + 'T12:00:00');
+  const day = d.getDay();
+  if (day === 0 || day === 6) return false;
+  return !esFestivoCO(fechaStr);
+}
+
+function diasHabilesEntre(d1Str, d2Str){
+  if (d1Str === d2Str) return 0;
+  let d1 = new Date(d1Str + 'T12:00:00');
+  let d2 = new Date(d2Str + 'T12:00:00');
+  if (d1 > d2) return -diasHabilesEntre(d2Str, d1Str);
+  let count = 0;
+  let curr = new Date(d1);
+  curr.setDate(curr.getDate() + 1);
+  while (curr <= d2){
+    const day = curr.getDay();
+    const iso = curr.toISOString().slice(0,10);
+    if (day !== 0 && day !== 6 && !esFestivoCO(iso)){
+      count++;
+    }
+    curr.setDate(curr.getDate() + 1);
+  }
+  return count;
+}
+
 const CFG_DEF = {
   lifeup:false, lifeModo:'tarea', coin:1, tasa:5000, exp:10, skills:'',
   tarea:'Registrar movimiento',
   url:'', neto:0, baseHasta:'2026-07', nombre:'', ocio:'Weekend,Recreación',
   monedas:0, monedasF:'', monedasRef:0,
   trmEUR:0, trmUSD:0, hurdle:0.168, odClient:'',
-  nomina: DEFAULT_NOMINA
+  nomina: DEFAULT_NOMINA,
+  facturasServicios: { updatedAt: null, facturas: [] }
 };
 
 /* --------- monedas ---------
@@ -4174,6 +4265,7 @@ function renderCfg(){
     Base histórica del Excel hasta ${ymLabel(CFG.baseHasta)} (${Object.keys(S.ejecucion).length} rubros con datos).<br>
     Semilla generada el ${S.generado}.`;
   renderCfgNomina();
+  renderCfgFacturas();
 }
 
 async function setCfg(k,v){ CFG[k]=v; await DB.put('cfg',{k,v}); }
@@ -4543,6 +4635,72 @@ async function wizNominaEjecutar(){
   wizNominaCerrar();
   autoSave();
   toast(`Nómina de ${ymLabel(WN.ym)} registrada. Neto: ${money(neto)} depositado en ${nomB(WN.bolsaNeto)}`);
+}
+
+/* =================== FACTURAS DE SERVICIOS Y TELEFONÍA (JSON) =================== */
+function getFacturaMes(rubroNombre, mesYM){
+  if (!CFG.facturasServicios || !Array.isArray(CFG.facturasServicios.facturas)) return null;
+  const list = CFG.facturasServicios.facturas;
+  const match = list.find(f => 
+    (f.rubro === rubroNombre || (sinTilde(f.rubro||'').toLowerCase() === sinTilde(rubroNombre||'').toLowerCase())) &&
+    (f.periodo === mesYM || (f.vencimiento && f.vencimiento.slice(0,7) === mesYM))
+  );
+  return match || null;
+}
+
+async function importarFacturasJSON(jsonStr){
+  try {
+    const data = JSON.parse(jsonStr);
+    let list = [];
+    if (Array.isArray(data)) list = data;
+    else if (data && Array.isArray(data.facturas)) list = data.facturas;
+    else if (data && Array.isArray(data.servicios)) list = data.servicios;
+    
+    if (!list.length){
+      toast('El archivo no contiene un arreglo de facturas válido', true);
+      return;
+    }
+
+    const obj = {
+      updatedAt: new Date().toISOString(),
+      facturas: list
+    };
+
+    CFG.facturasServicios = obj;
+    await setCfg('facturasServicios', obj);
+    renderCfgFacturas();
+    render();
+    toast(`Cargadas ${list.length} facturas de servicios en el sistema`);
+  } catch(e){
+    toast('Error al leer JSON: ' + e.message, true);
+  }
+}
+
+function renderCfgFacturas(){
+  const body = $$real('#cfFacturasBody');
+  if (!body) return;
+  const fs = CFG.facturasServicios || { facturas: [] };
+  const list = fs.facturas || [];
+
+  if (!list.length){
+    body.innerHTML = '<p class="note">No hay facturas cargadas en el sistema. Presioná <b>Subir JSON</b> para cargar el archivo depositado por el agente.</p>';
+    return;
+  }
+
+  let html = `<div style="font-size:12px;color:var(--tx2);margin-bottom:8px">Última actualización: ${fs.updatedAt ? fCorta(fs.updatedAt) : '—'} (${list.length} facturas)</div>`;
+  html += '<div style="display:flex;flex-direction:column;gap:6px;max-height:220px;overflow:auto">';
+  html += list.map(f => `
+    <div style="background:var(--bg2);border:1px solid var(--line);border-radius:8px;padding:6px 10px;display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <div style="font-weight:600;font-size:13px;color:var(--tx)">${f.rubro || f.empresa}</div>
+        <div style="font-size:11px;color:var(--tx3)">Vence: ${f.vencimiento || '—'} · ${f.empresa||'Servicio'}</div>
+      </div>
+      <b class="mono" style="color:var(--bad);font-size:13px">${money(f.monto||f.valor||0)}</b>
+    </div>
+  `).join('');
+  html += '</div>';
+
+  body.innerHTML = html;
 }
 
 /* =================== sincronización =================== */
@@ -6664,13 +6822,53 @@ function renderHome(){
     d:sobNeg.slice(0,3).join(', '), ir:'panel'});
   if (!odActivo()) av.push({st:'warn', t:'Sincronización sin conectar',
     d:'los datos viven solo en este dispositivo', ir:'cfg'});
-  if (+ymOf(new Date()).slice(5,7)===+ym.slice(5,7) && new Date().getDate()>=25)
-    av.push({st:'ok', t:'Es día de recalibrar', d:'revisá el presupuesto del mes que entra', ir:'panel'});
+  /* --- avisos de facturas de servicios públicos y telefonía (3 días hábiles / JSON) --- */
+  const servRubros = S.rubros.filter(r => 
+    r.cat === 'Servicios' || r.cat === 'Salud' || 
+    /servicio|claro|agua|energia|gas|telefon|internet|tigo|movistar|celular/i.test(r.n)
+  );
+
+  const hoyISO = todayISO();
+  for (const r of servRubros){
+    const pagado = MOV.some(m => vivo(m) && m.ym === ym && m.rubro === r.n);
+    if (pagado) continue;
+
+    const fac = getFacturaMes(r.n, ym);
+    if (!fac){
+      av.unshift({
+        st: 'warn',
+        t: `📄 Falta fecha de vencimiento: <b>${r.n}</b>`,
+        d: `No se encontró factura para ${ymLabel(ym)}. Toca para cargar JSON en Ajustes.`,
+        ir: 'cfg'
+      });
+    } else {
+      const habiles = diasHabilesEntre(hoyISO, fac.vencimiento);
+      if (habiles <= 3){
+        let msg = '';
+        if (habiles < 0){
+          msg = `🚨 <b>${r.n}</b> vencido hace ${Math.abs(habiles)} ${Math.abs(habiles)===1?'día hábil':'días hábiles'} (${fac.vencimiento})`;
+        } else if (habiles === 0){
+          msg = `🚨 <b>${r.n}</b> VENCE HOY (${fac.vencimiento})`;
+        } else {
+          msg = `🚨 <b>${r.n}</b> vence en <b>${habiles} ${habiles===1?'día hábil':'días hábiles'}</b> (${fac.vencimiento})`;
+        }
+
+        av.unshift({
+          st: 'bad',
+          t: msg,
+          d: `${money(fac.monto||fac.valor||0)} sin registrar · Tocá para pagar ahora`,
+          ir: 'reg_pad',
+          rubro: r.n,
+          monto: fac.monto||fac.valor||0
+        });
+      }
+    }
+  }
 
   $('#hoAvisos').style.display = av.length?'block':'none';
   $('#hoAvisosT').style.display = av.length?'flex':'none';
   $('#hoAvisos').innerHTML = av.map(a=>
-    `<div class="havi ${a.st}" data-ir="${a.ir}"><i></i>
+    `<div class="havi ${a.st}" data-ir="${a.ir}" data-rubro="${a.rubro||''}" data-monto="${a.monto||''}"><i></i>
       <span>${a.t}<div style="font-size:11.5px;color:var(--tx3)">${a.d}</div></span>
       <em>›</em></div>`).join('');
 
@@ -7241,12 +7439,30 @@ $('#hoVerTodos').onclick = e => { e.preventDefault();
 document.addEventListener('click', e => {
   const b = e.target.closest('#hoCards [data-ir], #hoAvisos [data-ir], #hoAccesos [data-ir]');
   if (!b) return;
-  view = b.dataset.ir; render();
+  if (b.dataset.ir === 'reg_pad'){
+    const r = b.dataset.rubro;
+    const m = +b.dataset.monto || 0;
+    if (r){
+      openPad(r);
+      if (m > 0) pad.v = m + '';
+      drawAmt();
+    }
+  } else {
+    view = b.dataset.ir; render();
+  }
 });
 $('#btnRecal').onclick = wizAbrir;
 if ($$real('#btnNomWiz')) $$real('#btnNomWiz').onclick = wizNominaAbrir;
 if ($$real('#btnNomGuardar')) $$real('#btnNomGuardar').onclick = cfgNominaGuardar;
 if ($$real('#wnSalir')) $$real('#wnSalir').onclick = wizNominaCerrar;
+if ($$real('#btnImpFacturas')) $$real('#btnImpFacturas').onclick = () => $('#fileFacturas').click();
+if ($$real('#fileFacturas')) $$real('#fileFacturas').onchange = e => {
+  const f = e.target.files[0]; if (!f) return;
+  const reader = new FileReader();
+  reader.onload = ev => importarFacturasJSON(ev.target.result);
+  reader.readAsText(f);
+  e.target.value = '';
+};
 $('#sList').onclick = e => { const b=e.target.closest('[data-sob]');
   if (b) editarVigencia(b.dataset.sob); };
 $$('.segrow .seg[data-pv]').forEach(b=>b.onclick = () => {
