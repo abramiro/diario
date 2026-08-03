@@ -851,6 +851,13 @@ input[type=text],input[type=number],input[type=date],select{
       </div>
       <div id="slConcil"></div>
     </div>
+    <div class="card" id="cardSlPto">
+      <div class="f" style="margin-bottom:10px">
+        <h3 style="flex:1;margin:0">Estado de Presupuestos</h3>
+        <span id="slPtoSem" class="sem gris"><i></i>—</span>
+      </div>
+      <div id="slPtoControl"></div>
+    </div>
     <div class="card"><div id="slList"></div></div>
     <div class="card">
       <h3>Verificar</h3>
@@ -1868,7 +1875,7 @@ async function guardar(){
   const e = estado(r, ym);
   let msg = (cur==='COP' ? money(v) : montoEn(cur,orig)+' = '+money(v))+' · '+r;
   if (f !== todayISO()) msg += ' · '+f;
-  if (e.p>0) msg += ' · quedan '+money(e.disp);
+  if (e.p>0) msg += e.disp<0 ? ' · excedido por '+money(Math.abs(e.disp)) : e.disp===0 ? ' · presupuesto agotado' : ' · quedan '+money(e.disp);
   toast(msg, e.p>0 && e.e>e.p);
   render();
   autoSave();
@@ -1906,13 +1913,28 @@ function openPad(r){
           dt: dtLocal(new Date()) };
   $('#padDT').style.display='none';
   padFechas();
-  $('#padRubro').textContent = r;
   const nat = RB[r] ? RB[r].nat : 'Hábito';
   $('#padNat').textContent = nat;
   const e = estado(r, ym);
-  $('#padHint').textContent = e.p>0
-    ? money(e.e)+' de '+money(e.p)+' · quedan '+money(e.disp)
-    : 'sin presupuesto asignado';
+  if (e.p > 0){
+    if (e.disp < 0){
+      $('#padRubro').innerHTML = `<span style="color:var(--bad);margin-right:5px" title="Presupuesto excedido">🛑</span>` + r;
+      $('#padHint').textContent = `${money(e.e)} de ${money(e.p)} · presupuesto agotado, excedido por ${money(Math.abs(e.disp))}`;
+      $('#padHint').style.color = 'var(--bad)';
+    } else if (e.disp === 0){
+      $('#padRubro').innerHTML = `<span style="color:var(--bad);margin-right:5px" title="Presupuesto agotado">🛑</span>` + r;
+      $('#padHint').textContent = `${money(e.e)} de ${money(e.p)} · presupuesto agotado`;
+      $('#padHint').style.color = 'var(--bad)';
+    } else {
+      $('#padRubro').textContent = r;
+      $('#padHint').textContent = `${money(e.e)} de ${money(e.p)} · quedan ${money(e.disp)}`;
+      $('#padHint').style.color = 'var(--tx2)';
+    }
+  } else {
+    $('#padRubro').textContent = r;
+    $('#padHint').textContent = 'sin presupuesto asignado';
+    $('#padHint').style.color = 'var(--tx2)';
+  }
   $('#padObs').value='';
   padCupo();
   /* la bolsa manda la moneda: se marca cuál no está en pesos */
@@ -5273,6 +5295,7 @@ function renderSaldos(){
 
   const _c=$$real('#slCorte'); if(_c) _c.textContent = SS.corte;
   renderConcil();
+  renderPtoControl();
 }
 function renderBolsas(){
   armarBolsas();
@@ -6435,6 +6458,94 @@ function renderConcil(){
       eso es redondeo.</p>`;
   }
   $('#slConcil').innerHTML = h;
+}
+
+/* ---------- resumen de estado de presupuestos en la pantalla de Saldos ---------- */
+function renderPtoControl(){
+  const cont = $$real('#slPtoControl');
+  if (!cont) return;
+
+  const excedidos = [];
+  const porVencer = [];
+
+  for (const r of S.rubros){
+    if (!NAT_PTO.includes(r.nat)) continue;
+    const e = estado(r.n, ym);
+    if (e.p === 0 && e.e === 0) continue;
+    if (e.p > 0 && e.e > e.p){
+      excedidos.push({ rName: r.n, nat: r.nat, ...e });
+    } else if (e.p > 0 && (e.e >= 0.85 * e.p || e.e > e.ritmo + 0.15 * e.p)){
+      porVencer.push({ rName: r.n, nat: r.nat, ...e });
+    }
+  }
+
+  /* Sobres de evento adelantados */
+  const sobresNeg = rubrosDe('Evento').map(sobreDe).filter(s => s.saldo < 0 || s.ejec > s.meta);
+  for (const s of sobresNeg){
+    if (!excedidos.some(x => x.rName === s.r)){
+      excedidos.push({ rName: s.r, nat: 'Evento', p: s.meta, e: s.ejec, disp: s.saldo, esSobre: true });
+    }
+  }
+
+  excedidos.sort((a,b) => (b.e - b.p) - (a.e - a.p));
+  porVencer.sort((a,b) => a.disp - b.disp);
+
+  const totalBad = excedidos.length;
+  const totalWarn = porVencer.length;
+
+  const sm = $$real('#slPtoSem');
+  if (sm){
+    if (totalBad > 0){
+      sm.className = 'sem bad';
+      sm.innerHTML = '<i></i>' + totalBad + ' excedido' + (totalBad === 1 ? '' : 's') + (totalWarn ? ' · ' + totalWarn + ' por vencer' : '');
+    } else if (totalWarn > 0){
+      sm.className = 'sem warn';
+      sm.innerHTML = '<i></i>' + totalWarn + ' por vencer / adelantado' + (totalWarn === 1 ? '' : 's');
+    } else {
+      sm.className = 'sem ok';
+      sm.innerHTML = '<i></i>todo al día';
+    }
+  }
+
+  if (totalBad === 0 && totalWarn === 0){
+    cont.innerHTML = '<p class="note">Todos los rubros y sobres están dentro de su presupuesto en ' + ymLabel(ym) + '.</p>';
+    return;
+  }
+
+  let html = '';
+  if (excedidos.length > 0){
+    html += '<div style="font-size:11px;color:var(--bad);text-transform:uppercase;letter-spacing:.08em;font-weight:700;margin-bottom:8px">🛑 Excedidos de presupuesto (' + excedidos.length + ')</div>';
+    html += excedidos.map(x => {
+      const exc = x.esSobre ? Math.abs(x.disp) : (x.e - x.p);
+      return `<div class="cat-r bad" data-reg="${x.rName}" style="cursor:pointer;padding:8px 10px;margin-bottom:6px;border-radius:8px">
+        <span style="color:var(--tx);font-weight:600">🛑 ${x.rName}${x.esSobre ? ' <em style="font-style:normal;font-size:10px;color:var(--tx3)">sobre</em>' : ''}</span>
+        <b class="mono" style="color:var(--bad)">excedido en ${money(exc)}</b>
+        <span style="flex:0 0 auto;color:var(--tx3);font-size:11.5px;min-width:80px;text-align:right">${money(x.e)} / ${money(x.p)}</span>
+      </div>`;
+    }).join('');
+  }
+
+  if (porVencer.length > 0){
+    html += '<div style="font-size:11px;color:var(--warn);text-transform:uppercase;letter-spacing:.08em;font-weight:700;margin:' + (excedidos.length ? '14px' : '0') + ' 0 8px">⚠️ Por vencer o adelantados (' + porVencer.length + ')</div>';
+    html += porVencer.map(x => {
+      const pct = x.p > 0 ? (x.e / x.p * 100).toFixed(0) : 0;
+      return `<div class="cat-r warn" data-reg="${x.rName}" style="cursor:pointer;padding:8px 10px;margin-bottom:6px;border-radius:8px">
+        <span style="color:var(--tx);font-weight:550">⚠️ ${x.rName}</span>
+        <b class="mono" style="color:var(--warn)">quedan ${money(x.disp)}</b>
+        <span style="flex:0 0 auto;color:var(--tx3);font-size:11.5px;min-width:80px;text-align:right">${pct}% (${money(x.e)}/${money(x.p)})</span>
+      </div>`;
+    }).join('');
+  }
+
+  html += '<p class="note" style="margin-top:10px">Tocá cualquier rubro para registrar un movimiento.</p>';
+  cont.innerHTML = html;
+
+  cont.onclick = e => {
+    const btn = e.target.closest('[data-reg]');
+    if (btn && btn.dataset.reg){
+      openPad(btn.dataset.reg);
+    }
+  };
 }
 
 /* =================== navegación y render =================== */
