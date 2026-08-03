@@ -1112,6 +1112,16 @@ input[type=text],input[type=number],input[type=date],select{
       hace que se pierdan en silencio.</p>
   </div>
 
+  <div class="card" id="cfNominaCard">
+    <div class="f" style="margin-bottom:8px">
+      <h3 style="flex:1;margin:0">Plantilla de Nómina / Desprendible</h3>
+      <button class="chipbtn on" id="btnNomWiz">⚡ Cargar Desprendible</button>
+    </div>
+    <p class="note" style="margin-bottom:12px">Valores habituales de tu comprobante de nómina para el registro rápido mensual, devengos, deducciones y depósito del neto.</p>
+    <div id="cfNominaBody"></div>
+    <button class="primary" id="btnNomGuardar" style="margin-top:10px">Guardar Plantilla de Nómina</button>
+  </div>
+
   <div class="card">
     <h3>Monedas</h3>
     <p class="note" style="margin-bottom:12px">Tres bolsas no están en pesos:
@@ -1304,6 +1314,18 @@ input[type=text],input[type=number],input[type=date],select{
   <div class="wz-track"><i id="wizProg" style="width:0%"></i></div>
   <div id="wizCuerpo"></div>
   <div id="wizPie"></div>
+</div>
+
+<div id="wizNomina" style="position:fixed;inset:0;z-index:85;background:var(--bg);display:none;
+     flex-direction:column;padding:calc(12px + env(safe-area-inset-top)) var(--pad) calc(14px + env(safe-area-inset-bottom));overflow:auto">
+  <div class="wz-top">
+    <button class="chipbtn" id="wnSalir">Cancelar</button>
+    <div style="flex:1;text-align:center;font-weight:600;font-size:14px">Registro de Nómina / Desprendible</div>
+    <div class="p" id="wnPaso">—</div>
+  </div>
+  <div class="wz-track"><i id="wnProg" style="width:0%"></i></div>
+  <div id="wnCuerpo" style="flex:1;margin-top:14px"></div>
+  <div id="wnPie" style="padding-top:12px"></div>
 </div>
 
 <div id="bed" style="position:fixed;inset:0;z-index:78;background:var(--bg);display:none;
@@ -1584,12 +1606,38 @@ const MESNOM = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov
 const MESLAR = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto',
   'septiembre','octubre','noviembre','diciembre'];
 
+const DEFAULT_NOMINA = {
+  empresa: 'HITSS COLOMBIA SAS',
+  basico: 17443000,
+  bolsaNeto: '',
+  devengos: [
+    { cod: 'M010', n: 'Sueldo Básico', v: 17443000, cat: 'Nómina', nat: 'Ingreso' },
+    { cod: '1M88', n: 'Ant. Prima Legal', v: 1453583, cat: 'Nómina', nat: 'Ingreso' },
+    { cod: '1M89', n: 'Ant. Intereses Cesantías', v: 174430, cat: 'Nómina', nat: 'Ingreso' }
+  ],
+  deducciones: [
+    { cod: 'T000', n: 'Descuento Salud', v: 697720, cat: 'Servicios', nat: 'Comprometido' },
+    { cod: 'T010', n: 'Descuento Pensión', v: 697720, cat: 'Servicios', nat: 'Comprometido' },
+    { cod: 'T020', n: 'Descuento Solidaridad', v: 174430, cat: 'Servicios', nat: 'Comprometido' },
+    { cod: 'T050', n: 'Retención en la Fuente', v: 1962000, cat: 'Impuestos', nat: 'Comprometido' },
+    { cod: '2T49', n: 'Desc.Med.Prepag.Medisánit', v: 316972, cat: 'Salud', nat: 'Comprometido' },
+    { cod: '2T30', n: 'Aportes FECC', v: 60000, cat: 'Ahorro', nat: 'Ahorro' },
+    { cod: '2T09', n: 'Serv. Claro fijo', v: 12000, cat: 'Servicios', nat: 'Comprometido' }
+  ]
+};
+
+function getCfgNomina(){
+  if (CFG.nomina && typeof CFG.nomina === 'object') return CFG.nomina;
+  return DEFAULT_NOMINA;
+}
+
 const CFG_DEF = {
   lifeup:false, lifeModo:'tarea', coin:1, tasa:5000, exp:10, skills:'',
   tarea:'Registrar movimiento',
   url:'', neto:0, baseHasta:'2026-07', nombre:'', ocio:'Weekend,Recreación',
   monedas:0, monedasF:'', monedasRef:0,
-  trmEUR:0, trmUSD:0, hurdle:0.168, odClient:''
+  trmEUR:0, trmUSD:0, hurdle:0.168, odClient:'',
+  nomina: DEFAULT_NOMINA
 };
 
 /* --------- monedas ---------
@@ -2696,6 +2744,19 @@ async function rubroRend(){
   S.rubros.unshift(r); RB[N]=r;
   await DB.put('cfg',{k:'rubrosExtra', v:S.rubros.filter(x=>x.nuevo)});
   return N;
+}
+
+/* asegura que un rubro exista; si no está, lo crea con su categoría y naturaleza */
+async function asegurarRubro(nombre, cat, nat, pto){
+  if (!nombre) return null;
+  const n = nombre.trim();
+  if (RB[n]) return RB[n];
+  const r = { n, cat: cat||'Nómina', nat: nat||'Comprometido', pto: pto||0, med6:0, med12:0, cv:null,
+    n12:0, tend:null, a:[0,0,0,0], anual:0, uso:1, bolsa: (S && S.bolsas && S.bolsas[0]) || 'Caja',
+    aviso:'', nuevo:true };
+  S.rubros.unshift(r); RB[n]=r;
+  await DB.put('cfg', {k:'rubrosExtra', v:S.rubros.filter(x=>x.nuevo)});
+  return r;
 }
 
 /* activo enlazado a una bolsa de inversión; se crea si no está */
@@ -4112,9 +4173,377 @@ function renderCfg(){
     ${ACT.length} activos · ${FLU.length} flujos · ${VAL.length} valoraciones.<br>
     Base histórica del Excel hasta ${ymLabel(CFG.baseHasta)} (${Object.keys(S.ejecucion).length} rubros con datos).<br>
     Semilla generada el ${S.generado}.`;
+  renderCfgNomina();
 }
 
 async function setCfg(k,v){ CFG[k]=v; await DB.put('cfg',{k,v}); }
+
+/* =================== NÓMINA / DESPRENDIBLE DE PAGO =================== */
+function renderCfgNomina(){
+  const body = $$real('#cfNominaBody');
+  if (!body) return;
+  const nom = getCfgNomina();
+
+  let html = `
+    <div class="f" style="margin-bottom:10px">
+      <label>Empresa / Empleador</label>
+      <input type="text" id="cnEmpresa" value="${nom.empresa||''}" placeholder="HITSS COLOMBIA SAS">
+    </div>
+    <div class="f" style="margin-bottom:10px">
+      <label>Salario Básico ($)</label>
+      <input type="number" id="cnBasico" value="${nom.basico||0}" step="any">
+    </div>
+    <div class="f" style="margin-bottom:10px">
+      <label>Bolsa Destino del Neto</label>
+      <select id="cnBolsaNeto">
+        ${(S.bolsas||[]).map(b => `<option value="${b}" ${nom.bolsaNeto===b?'selected':''}>${nomB(b)}</option>`).join('')}
+      </select>
+    </div>
+
+    <div style="font-weight:600;font-size:12.5px;color:var(--tx);margin:14px 0 6px">Devengos por defecto (${nom.devengos.length})</div>
+    <div id="cnDevList">
+      ${nom.devengos.map((d, i) => `
+        <div class="f cn-row" style="margin-bottom:6px;gap:6px">
+          <input type="text" class="cn-cod" value="${d.cod||''}" placeholder="Código" style="width:65px">
+          <input type="text" class="cn-nom" value="${d.n||''}" placeholder="Concepto" style="flex:1">
+          <input type="number" class="cn-val" value="${d.v||0}" placeholder="Monto" style="width:110px">
+          <button class="chipbtn cn-del" data-type="dev" data-i="${i}">✕</button>
+        </div>
+      `).join('')}
+    </div>
+    <button class="chipbtn" id="cnAddDev" style="margin-bottom:12px">＋ Agregar Devengo</button>
+
+    <div style="font-weight:600;font-size:12.5px;color:var(--tx);margin:14px 0 6px">Deducciones por defecto (${nom.deducciones.length})</div>
+    <div id="cnDedList">
+      ${nom.deducciones.map((d, i) => `
+        <div class="f cn-row" style="margin-bottom:6px;gap:6px">
+          <input type="text" class="cn-cod" value="${d.cod||''}" placeholder="Código" style="width:65px">
+          <input type="text" class="cn-nom" value="${d.n||''}" placeholder="Concepto" style="flex:1">
+          <input type="number" class="cn-val" value="${d.v||0}" placeholder="Monto" style="width:110px">
+          <button class="chipbtn cn-del" data-type="ded" data-i="${i}">✕</button>
+        </div>
+      `).join('')}
+    </div>
+    <button class="chipbtn" id="cnAddDed" style="margin-bottom:12px">＋ Agregar Deducción</button>
+  `;
+
+  body.innerHTML = html;
+
+  const btnDev = $$real('#cnAddDev');
+  if (btnDev) btnDev.onclick = () => {
+    nom.devengos.push({ cod: '', n: 'Nuevo Devengo', v: 0, cat: 'Nómina', nat: 'Ingreso' });
+    renderCfgNomina();
+  };
+  const btnDed = $$real('#cnAddDed');
+  if (btnDed) btnDed.onclick = () => {
+    nom.deducciones.push({ cod: '', n: 'Nueva Deducción', v: 0, cat: 'Servicios', nat: 'Comprometido' });
+    renderCfgNomina();
+  };
+
+  body.onclick = e => {
+    const btn = e.target.closest('.cn-del');
+    if (btn){
+      const type = btn.dataset.type;
+      const idx = +btn.dataset.i;
+      if (type === 'dev') nom.devengos.splice(idx, 1);
+      else if (type === 'ded') nom.deducciones.splice(idx, 1);
+      renderCfgNomina();
+    }
+  };
+}
+
+async function cfgNominaGuardar(){
+  const empresa = ($$real('#cnEmpresa') && $$real('#cnEmpresa').value) || 'HITSS COLOMBIA SAS';
+  const basico = +($$real('#cnBasico') && $$real('#cnBasico').value) || 0;
+  const bolsaNeto = ($$real('#cnBolsaNeto') && $$real('#cnBolsaNeto').value) || (S.bolsas[0]||'Caja');
+
+  const devRows = $$('#cnDevList .cn-row');
+  const devengos = [];
+  devRows.forEach(row => {
+    const cod = row.querySelector('.cn-cod').value;
+    const n = row.querySelector('.cn-nom').value;
+    const v = +row.querySelector('.cn-val').value || 0;
+    if (n) devengos.push({ cod, n, v, cat: 'Nómina', nat: 'Ingreso' });
+  });
+
+  const dedRows = $$('#cnDedList .cn-row');
+  const deducciones = [];
+  dedRows.forEach(row => {
+    const cod = row.querySelector('.cn-cod').value;
+    const n = row.querySelector('.cn-nom').value;
+    const v = +row.querySelector('.cn-val').value || 0;
+    if (n) deducciones.push({ cod, n, v, cat: 'Servicios', nat: 'Comprometido' });
+  });
+
+  const nominaObj = { empresa, basico, bolsaNeto, devengos, deducciones };
+  CFG.nomina = nominaObj;
+  await setCfg('nomina', nominaObj);
+  toast('Plantilla de nómina guardada');
+}
+
+let WN = null;
+
+function wizNominaAbrir(){
+  const cfgNom = getCfgNomina();
+  WN = {
+    paso: 1,
+    ym: ym || ymOf(new Date()),
+    empresa: cfgNom.empresa || 'HITSS COLOMBIA SAS',
+    basico: cfgNom.basico || 17443000,
+    bolsaNeto: cfgNom.bolsaNeto || (S.bolsas[0] || 'Caja'),
+    devengos: JSON.parse(JSON.stringify(cfgNom.devengos || [])),
+    deducciones: JSON.parse(JSON.stringify(cfgNom.deducciones || []))
+  };
+  wizNominaPintar();
+  $('#wizNomina').style.display = 'flex';
+}
+
+function wizNominaCerrar(){
+  $('#wizNomina').style.display = 'none';
+  render();
+}
+
+function wizNominaPintar(){
+  if (!WN) return;
+  const paso = WN.paso;
+  $('#wnProg').style.width = (paso / 4 * 100) + '%';
+  $('#wnPaso').textContent = `Paso ${paso} de 4`;
+
+  const totalDev = WN.devengos.reduce((s, x) => s + (x.v || 0), 0);
+  const totalDed = WN.deducciones.reduce((s, x) => s + (x.v || 0), 0);
+  const neto = totalDev - totalDed;
+
+  let cuerpoHtml = '';
+  if (paso === 1){
+    cuerpoHtml = `
+      <div style="font-weight:600;font-size:16px;color:var(--tx);margin-bottom:6px">1. Datos Generales de la Nómina</div>
+      <p class="note" style="margin-bottom:14px">Periodo y salario básico a liquidar.</p>
+      
+      <div class="f" style="margin-bottom:12px">
+        <label>Periodo (Mes)</label>
+        <input type="month" id="wnYM" value="${WN.ym}" style="max-width:160px">
+      </div>
+      <div class="f" style="margin-bottom:12px">
+        <label>Empresa / Empleador</label>
+        <input type="text" id="wnEmpresa" value="${WN.empresa}" style="flex:1">
+      </div>
+      <div class="f" style="margin-bottom:12px">
+        <label>Salario Básico ($)</label>
+        <input type="number" id="wnBasico" value="${WN.basico}" step="any" style="flex:1">
+      </div>
+      <div class="f" style="margin-bottom:12px">
+        <label>Bolsa de Destino del Neto</label>
+        <select id="wnBolsaNeto" style="flex:1">
+          ${(S.bolsas||[]).map(b => `<option value="${b}" ${WN.bolsaNeto===b?'selected':''}>${nomB(b)}</option>`).join('')}
+        </select>
+      </div>`;
+  } else if (paso === 2){
+    cuerpoHtml = `
+      <div style="font-weight:600;font-size:16px;color:var(--tx);margin-bottom:6px">2. Devengos (Ingresos de Nómina)</div>
+      <p class="note" style="margin-bottom:12px">Ajustá los conceptos devengados en el mes.</p>
+      <div id="wnDevRows">
+        ${WN.devengos.map((d, i) => `
+          <div class="f wn-row" style="margin-bottom:8px;gap:6px">
+            <input type="text" class="wn-cod" value="${d.cod||''}" placeholder="Cód" style="width:65px">
+            <input type="text" class="wn-nom" value="${d.n||''}" placeholder="Concepto" style="flex:1">
+            <input type="number" class="wn-val" value="${d.v||0}" placeholder="Valor" style="width:120px">
+            <button class="chipbtn wn-del" data-type="dev" data-i="${i}">✕</button>
+          </div>
+        `).join('')}
+      </div>
+      <button class="chipbtn" id="wnAddDev" style="margin-bottom:14px">＋ Agregar Devengo</button>
+      <div style="background:var(--bg2);border:1px solid var(--line);border-radius:10px;padding:10px;display:flex;justify-content:space-between;align-items:center">
+        <span>Total Devengos</span>
+        <b class="mono" style="color:var(--ok);font-size:15px">${money(totalDev)}</b>
+      </div>`;
+  } else if (paso === 3){
+    cuerpoHtml = `
+      <div style="font-weight:600;font-size:16px;color:var(--tx);margin-bottom:6px">3. Deducciones (Descuentos)</div>
+      <p class="note" style="margin-bottom:12px">Ajustá las deducciones de ley y otros descuentos.</p>
+      <div id="wnDedRows">
+        ${WN.deducciones.map((d, i) => `
+          <div class="f wn-row" style="margin-bottom:8px;gap:6px">
+            <input type="text" class="wn-cod" value="${d.cod||''}" placeholder="Cód" style="width:65px">
+            <input type="text" class="wn-nom" value="${d.n||''}" placeholder="Concepto" style="flex:1">
+            <input type="number" class="wn-val" value="${d.v||0}" placeholder="Valor" style="width:120px">
+            <button class="chipbtn wn-del" data-type="ded" data-i="${i}">✕</button>
+          </div>
+        `).join('')}
+      </div>
+      <button class="chipbtn" id="wnAddDed" style="margin-bottom:14px">＋ Agregar Deducción</button>
+      <div style="background:var(--bg2);border:1px solid var(--line);border-radius:10px;padding:10px;display:flex;justify-content:space-between;align-items:center">
+        <span>Total Deducciones</span>
+        <b class="mono" style="color:var(--bad);font-size:15px">${money(totalDed)}</b>
+      </div>`;
+  } else if (paso === 4){
+    const faltantes = [...WN.devengos, ...WN.deducciones].filter(x => x.n && !RB[x.n]);
+    cuerpoHtml = `
+      <div style="font-weight:600;font-size:16px;color:var(--tx);margin-bottom:6px">4. Resumen y Confirmación</div>
+      <p class="note" style="margin-bottom:14px">Revisá la distribución antes de registrar los movimientos en el Diario.</p>
+
+      <div style="background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:14px">
+        <div class="f" style="margin-bottom:6px"><span style="color:var(--tx2)">Periodo</span><b>${ymLabel(WN.ym)}</b></div>
+        <div class="f" style="margin-bottom:6px"><span style="color:var(--tx2)">Empresa</span><b>${WN.empresa}</b></div>
+        <div class="f" style="margin-bottom:6px"><span style="color:var(--tx2)">Total Devengos</span><b class="mono" style="color:var(--ok)">+${money(totalDev)}</b></div>
+        <div class="f" style="margin-bottom:6px"><span style="color:var(--tx2)">Total Deducciones</span><b class="mono" style="color:var(--bad)">-${money(totalDed)}</b></div>
+        <div class="hr"></div>
+        <div class="f" style="margin-top:6px"><span style="font-weight:600">Neto a Depositar</span><b class="mono" style="color:var(--acc);font-size:16px">${money(neto)}</b></div>
+        <div class="f" style="margin-top:4px"><span style="color:var(--tx3);font-size:12px">Bolsa destino</span><span style="font-weight:550">${nomB(WN.bolsaNeto)}</span></div>
+      </div>
+
+      ${faltantes.length ? `
+        <div class="warnbox" style="margin-bottom:14px">
+          <b>Rubros a crear automáticamente (${faltantes.length}):</b><br>
+          ${faltantes.map(f => `· ${f.n} (${f.cat || 'General'})`).join('<br>')}
+        </div>
+      ` : '<div class="note" style="margin-bottom:14px">✓ Todos los rubros del desprendible ya existen en la base de datos.</div>'}
+    `;
+  }
+
+  $('#wnCuerpo').innerHTML = cuerpoHtml;
+
+  /* Manejo de eventos en cada paso */
+  if (paso === 1){
+    const ymInp = $$real('#wnYM'); if (ymInp) ymInp.onchange = () => { WN.ym = ymInp.value; };
+    const empInp = $$real('#wnEmpresa'); if (empInp) empInp.oninput = () => { WN.empresa = empInp.value; };
+    const basInp = $$real('#wnBasico'); if (basInp) basInp.oninput = () => { WN.basico = +basInp.value||0; };
+    const bolSel = $$real('#wnBolsaNeto'); if (bolSel) bolSel.onchange = () => { WN.bolsaNeto = bolSel.value; };
+  } else if (paso === 2){
+    const btnAddDev = $$real('#wnAddDev');
+    if (btnAddDev) btnAddDev.onclick = () => {
+      WN.devengos.push({ cod: '', n: 'Nuevo Devengo', v: 0, cat: 'Nómina', nat: 'Ingreso' });
+      wizNominaPintar();
+    };
+    const rowsDev = $$real('#wnDevRows');
+    if (rowsDev){
+      rowsDev.oninput = e => {
+        const row = e.target.closest('.wn-row');
+        if (row){
+          const i = Array.from(row.parentNode.children).indexOf(row);
+          WN.devengos[i].cod = row.querySelector('.wn-cod').value;
+          WN.devengos[i].n = row.querySelector('.wn-nom').value;
+          WN.devengos[i].v = +row.querySelector('.wn-val').value || 0;
+        }
+      };
+      rowsDev.onclick = e => {
+        const btn = e.target.closest('.wn-del');
+        if (btn){
+          const idx = +btn.dataset.i;
+          WN.devengos.splice(idx, 1);
+          wizNominaPintar();
+        }
+      };
+    }
+  } else if (paso === 3){
+    const btnAddDed = $$real('#wnAddDed');
+    if (btnAddDed) btnAddDed.onclick = () => {
+      WN.deducciones.push({ cod: '', n: 'Nueva Deducción', v: 0, cat: 'Servicios', nat: 'Comprometido' });
+      wizNominaPintar();
+    };
+    const rowsDed = $$real('#wnDedRows');
+    if (rowsDed){
+      rowsDed.oninput = e => {
+        const row = e.target.closest('.wn-row');
+        if (row){
+          const i = Array.from(row.parentNode.children).indexOf(row);
+          WN.deducciones[i].cod = row.querySelector('.wn-cod').value;
+          WN.deducciones[i].n = row.querySelector('.wn-nom').value;
+          WN.deducciones[i].v = +row.querySelector('.wn-val').value || 0;
+        }
+      };
+      rowsDed.onclick = e => {
+        const btn = e.target.closest('.wn-del');
+        if (btn){
+          const idx = +btn.dataset.i;
+          WN.deducciones.splice(idx, 1);
+          wizNominaPintar();
+        }
+      };
+    }
+  }
+
+  /* Pie de botones */
+  let pieHtml = '<div class="row">';
+  if (paso > 1){
+    pieHtml += `<button class="primary gray" id="wnAtras">← Atrás</button>`;
+  }
+  if (paso < 4){
+    pieHtml += `<button class="primary" id="wnSiguiente">Siguiente →</button>`;
+  } else {
+    pieHtml += `<button class="primary" id="wnEjecutar">⚡ Registrar Nómina</button>`;
+  }
+  pieHtml += '</div>';
+  $('#wnPie').innerHTML = pieHtml;
+
+  if ($$real('#wnAtras')) $$real('#wnAtras').onclick = () => { WN.paso--; wizNominaPintar(); };
+  if ($$real('#wnSiguiente')) $$real('#wnSiguiente').onclick = () => { WN.paso++; wizNominaPintar(); };
+  if ($$real('#wnEjecutar')) $$real('#wnEjecutar').onclick = () => wizNominaEjecutar();
+}
+
+async function wizNominaEjecutar(){
+  if (!WN) return;
+  const dt = dtLocal(new Date());
+
+  /* 1. Crear rubros faltantes */
+  for (const d of WN.devengos){
+    if (d.n) await asegurarRubro(d.n, d.cat||'Nómina', d.nat||'Ingreso', d.v);
+  }
+  for (const d of WN.deducciones){
+    if (d.n) await asegurarRubro(d.n, d.cat||'Servicios', d.nat||'Comprometido', d.v);
+  }
+
+  /* 2. Movimientos de Devengos (Ingreso) */
+  for (const d of WN.devengos){
+    if (!d.n || !d.v) continue;
+    const m = {
+      id: genId(),
+      dt: WN.ym + '-01 08:00',
+      rubro: d.n,
+      valor: d.v,
+      bolsa: WN.bolsaNeto,
+      obs: `Devengo nómina ${WN.empresa}${d.cod ? ' [' + d.cod + ']' : ''}`,
+      moneda: 'COP',
+      tasa: 1,
+      valorOrig: d.v
+    };
+    MOV.push(m);
+    await DB.put('mov', m);
+  }
+
+  /* 3. Movimientos de Deducciones (Egreso) */
+  for (const d of WN.deducciones){
+    if (!d.n || !d.v) continue;
+    const m = {
+      id: genId(),
+      dt: WN.ym + '-01 08:05',
+      rubro: d.n,
+      valor: d.v,
+      bolsa: WN.bolsaNeto,
+      obs: `Deducción nómina ${WN.empresa}${d.cod ? ' [' + d.cod + ']' : ''}`,
+      moneda: 'COP',
+      tasa: 1,
+      valorOrig: d.v
+    };
+    MOV.push(m);
+    await DB.put('mov', m);
+  }
+
+  const totalDev = WN.devengos.reduce((s, x) => s + (x.v || 0), 0);
+  const totalDed = WN.deducciones.reduce((s, x) => s + (x.v || 0), 0);
+  const neto = totalDev - totalDed;
+
+  /* 4. Actualización del módulo de Pensión si existe IBC */
+  if (WN.basico > 0 && typeof penNuevoCorte === 'function'){
+    try {
+      const c = penNuevoCorte(dt.slice(0,10), WN.basico, Math.round(WN.basico * 0.16));
+      await DB.put('cfg', { k: 'penCortes', v: c });
+    } catch(err){}
+  }
+
+  wizNominaCerrar();
+  autoSave();
+  toast(`Nómina de ${ymLabel(WN.ym)} registrada. Neto: ${money(neto)} depositado en ${nomB(WN.bolsaNeto)}`);
+}
 
 /* =================== sincronización =================== */
 function snapshot(){
@@ -6199,7 +6628,9 @@ function renderHome(){
       ${svg(icono(r.n, r.cat))}<span class="e">${r.n}</span></button>`;
   }).join('')
   + `<button class="htile acc" data-ir="mover">${svg(ICONOS.mover)}
-      <span class="e">Mover</span></button>`;
+      <span class="e">Mover</span></button>`
+  + `<button class="htile acc" data-ir="nomina" style="background:var(--acc2);border-color:var(--acc2)">${svg(ICONOS.trabajo)}
+      <span class="e">Nómina</span></button>`;
 
   /* --- tarjetas de estado --- */
   const holg = holgura(ym);
@@ -6782,6 +7213,7 @@ $('#hoRubros').onclick = e => {
   const b = e.target.closest('[data-reg],[data-ir]'); if(!b) return;
   if (b.dataset.reg) openPad(b.dataset.reg);
   else if (b.dataset.ir==='mover') abrirMov();
+  else if (b.dataset.ir==='nomina') wizNominaAbrir();
 };
 $('#nuevaVOk').onclick = () => {
   if (navigator.serviceWorker && navigator.serviceWorker.controller)
@@ -6812,6 +7244,9 @@ document.addEventListener('click', e => {
   view = b.dataset.ir; render();
 });
 $('#btnRecal').onclick = wizAbrir;
+if ($$real('#btnNomWiz')) $$real('#btnNomWiz').onclick = wizNominaAbrir;
+if ($$real('#btnNomGuardar')) $$real('#btnNomGuardar').onclick = cfgNominaGuardar;
+if ($$real('#wnSalir')) $$real('#wnSalir').onclick = wizNominaCerrar;
 $('#sList').onclick = e => { const b=e.target.closest('[data-sob]');
   if (b) editarVigencia(b.dataset.sob); };
 $$('.segrow .seg[data-pv]').forEach(b=>b.onclick = () => {
