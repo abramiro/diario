@@ -5918,18 +5918,21 @@ function renderBolsasJerarquia(filas, tot){
           ${x.nota?`<em>${x.nota}</em>`:''}
           ${hs.length?`<em>${hs.length} bolsillos · tocá para ${abierta?'cerrar':'ver'}</em>`:''}
           ${cur?`<em>${montoEn(x.moneda,x.s)} · TRM ${money(trmDe(x.moneda))}</em>`:''}
-          ${!hs.length ? `<em>${sm.st==='gris' ? 'sin verificar'
-            : sm.st==='ok' ? 'cuadra · '+x.verF
-            : sm.et+' · '+money(sm.dif)}</em>` : ''}</div>
+          <em>${sm.st==='gris' ? 'sin verificar'
+            : sm.st==='ok' ? 'cuadra · '+(x.verF||(sm.ver&&sm.ver.fecha)||'')
+            : sm.et+' · '+money(sm.dif)}</em></div>
         <div class="sl-v mono">${money(x.cop)}</div>
+        <button type="button" class="chipbtn bsa-conc-btn" data-conc="${x.b}" style="font-size:11px;padding:2px 8px;margin-left:6px">Conciliar</button>
       </div>`
       + (hs.length && abierta ? (()=>{
           const madreS = saldoPropio(x.b);
-          const filaM = Math.abs(madreS) > 0.5
-            ? `<div class="sl-r sub" data-b="${x.b}">
-                <div class="sl-n" style="color:var(--tx3)">${nomB(x.b)}</div>
-                <div class="sl-v mono" style="color:var(--tx3)">${money(enPesos(x.b,madreS))}</div>
-              </div>` : '';
+          const smM = semaforoPropio(x.b);
+          const filaM = `<div class="sl-r sub" data-b-propio="${x.b}" style="cursor:pointer" title="Conciliar la cuenta principal sin bolsillos">
+                <div class="sl-n" style="color:var(--tx2)">${nomB(x.b)} <em style="font-style:normal;opacity:.7">(disponible propia)</em>
+                  <em>${smM.st==='gris' ? 'sin verificar' : smM.st==='ok' ? 'cuadra' : smM.et+' · '+money(smM.dif)}</em></div>
+                <div class="sl-v mono" style="color:var(--tx2)">${money(enPesos(x.b,madreS))}</div>
+                <button type="button" class="chipbtn" data-conc-propio="${x.b}" style="font-size:10px;padding:2px 6px;margin-left:6px">Conciliar propia</button>
+              </div>`;
           return filaM + hs.map(h=>{
               const sp = saldoPropio(h.b);
               return fila({...h, s:sp, cop:enPesos(h.b,sp),
@@ -6916,21 +6919,24 @@ function renderHome(){
 function tolerancia(saldo){
   return Math.max(1000, Math.abs(saldo)*0.005);
 }
-function semaforo(nb){
-  if (hijos(nb).length) return {st:'gris', et:'suma de bolsillos', dif:null};
+function semaforo(nb, forcePropio){
   const v = VER[nb];
   if (!v) return {st:'gris', et:'sin verificar', dif:null};
-  /* el saldo que el sistema creía tener EL DÍA de la verificación */
-  const alDia = saldoPropio(nb, v.fecha);
+  const hs = hijos(nb);
+  const esProp = forcePropio || v.propio;
+  const usaTotal = hs.length > 0 && !esProp;
+  const alDia = usaTotal ? saldoDe(nb, v.fecha) : saldoPropio(nb, v.fecha);
   const dif = alDia - v.v, tol = tolerancia(v.v);
   const dias = Math.round((Date.now() - new Date(v.fecha+'T12:00'))/864e5);
-  const post = saldoPropio(nb) - alDia;    /* movimientos posteriores */
-  const base = {dif, ver:v, alDia, dias, post};
+  const curS = usaTotal ? saldoDe(nb) : saldoPropio(nb);
+  const post = curS - alDia;
+  const base = {dif, ver:v, alDia, dias, post, usaTotal};
   if (Math.abs(dif) >= 1 && Math.abs(dif) > tol) return {...base, st:'bad', et:'no cuadra'};
   if (Math.abs(dif) >= 1)                        return {...base, st:'warn', et:'diferencia menor'};
   if (dias > 35) return {...base, st:'warn', et:'conviene reverificar', vieja:true};
   return {...base, st:'ok', et:'cuadra'};
 }
+const semaforoPropio = nb => semaforo(nb, true);
 
 /* rubros para cargar la diferencia, según de qué lado esté */
 const AJ_GASTO   = ['Costos Bancarios','Intereses','Impuestos Vehículo','Otros'];
@@ -6944,31 +6950,50 @@ const esInversion = nb => { const i = BOLSA[nb];
   return !!i && i.grupo==='Ahorro e inversión'
       && i.tipo!=='Prestado' && i.tipo!=='Deuda' && !hijos(nb).length; };
 
-function abrirBolsa(nb){
+function abrirBolsa(nb, esPropio){
   BSA = {b:nb, rubro:null, contra:(nb==='Caja' ? 'Ahorro$' : null),
-    modo: esInversion(nb) ? 'valor' : 'rubro'};
+    modo: esInversion(nb) ? 'valor' : 'rubro',
+    propio: !!esPropio};
   $('#bsaTit').textContent = nomB(nb);
   bsaPintar();
   $('#bsa').style.display='flex';
 }
+function abrirBolsaPropio(nb){ abrirBolsa(nb, true); }
 function cerrarBolsa(){ $('#bsa').style.display='none'; renderSaldos(); }
 
 function bsaPintar(){
   const nb = BSA.b, info = BOLSA[nb]||{};
   const cur = info.moneda || 'COP';
-  const s = saldoPropio(nb);
-  const sem = semaforo(nb);
+  const hs = hijos(nb);
+  const esPropio = BSA.propio || (hs.length > 0 && VER[nb] && VER[nb].propio);
+  const usaTotal = hs.length > 0 && !esPropio;
+  const s = usaTotal ? saldoDe(nb) : saldoPropio(nb);
+  const sem = semaforo(nb, esPropio);
   const dif = sem.dif;
   const falta = dif!=null && Math.abs(dif) >= 1;
 
-  /* El signo de la diferencia decide qué rubros valen. Si el elegido quedó
-     del lado contrario —porque la diferencia cambió de signo al reverificar—
-     hay que soltarlo, o se ofrecería registrar un ingreso como gasto. */
   const opciones = (dif>0 ? AJ_GASTO : AJ_INGRESO).filter(r=>RB[r]);
   if (!opciones.includes(BSA.rubro)) BSA.rubro = opciones[0] || null;
 
-  let h = `<div class="concil">
-      <div><span>Saldo hoy</span><b class="mono">${montoEn(cur,s)}</b></div>
+  let h = '';
+  if (hs.length > 0){
+    h += `<div style="background:var(--bg3);border:1px solid var(--line2);border-radius:12px;padding:10px 12px;margin-bottom:12px;font-size:13px">
+      <div style="font-weight:600;margin-bottom:4px">Bolsa madre con ${hs.length} bolsillos</div>
+      <div style="display:flex;justify-content:space-between;color:var(--tx2);margin-bottom:2px">
+        <span>Saldo total acumulado:</span> <b class="mono" style="color:var(--tx)">${montoEn(cur, saldoDe(nb))}</b>
+      </div>
+      <div style="display:flex;justify-content:space-between;color:var(--tx2)">
+        <span>Saldo disponible propio:</span> <b class="mono" style="color:var(--tx)">${montoEn(cur, saldoPropio(nb))}</b>
+      </div>
+      <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--line);display:flex;gap:6px">
+        <button type="button" class="chipbtn ${usaTotal?'on':''}" id="bsaModoTotal" style="flex:1;font-size:11.5px;padding:4px">Verificar Saldo Total</button>
+        <button type="button" class="chipbtn ${!usaTotal?'on':''}" id="bsaModoPropio" style="flex:1;font-size:11.5px;padding:4px">Verificar Disponible Propio</button>
+      </div>
+    </div>`;
+  }
+
+  h += `<div class="concil">
+      <div><span>${usaTotal?'Saldo total hoy':'Saldo hoy'}</span><b class="mono">${montoEn(cur,s)}</b></div>
       <div><span>Verificado</span><b class="mono">${
         sem.ver ? montoEn(cur, sem.ver.v) : '—'}</b></div>
       <div class="dif ${falta?'no':'si'}"><span>Diferencia</span><b class="mono">${
@@ -7050,10 +7075,15 @@ function bsaPintar(){
   }
   $('#bsaCuerpo').innerHTML = h;
 
+  const btnTot = $$real('#bsaModoTotal');
+  if (btnTot) btnTot.onclick = () => { BSA.propio = false; bsaPintar(); };
+  const btnProp = $$real('#bsaModoPropio');
+  if (btnProp) btnProp.onclick = () => { BSA.propio = true; bsaPintar(); };
+
   $('#bsaGuardarVer').onclick = async () => {
     const t = $('#bsaVer').value;
     if (t==='') { toast('Escribí un valor', true); return; }
-    VER[nb] = {v:+t||0, fecha:todayISO()};
+    VER[nb] = {v:+t||0, fecha:todayISO(), propio: usaTotal ? false : true};
     await DB.put('ver', {b:nb, ...VER[nb]});
     const act = actDeBolsa(nb);
     if (act){
@@ -7062,7 +7092,7 @@ function bsaPintar(){
       VAL.push(rec); await DB.put('val', rec);
     }
     bsaPintar(); renderSaldos(); autoSave();
-    const d = saldoPropio(nb) - VER[nb].v;
+    const d = s - VER[nb].v;
     toast(Math.abs(d)<1 ? nomB(nb)+' cuadra' : 'Diferencia de '+montoEn(cur,d), Math.abs(d)>=1);
   };
   $('#bsaBorrarVer').onclick = async () => {
@@ -7136,7 +7166,7 @@ async function ajustar(){
 
 /* ---------- resumen de conciliación en la pantalla de Saldos ---------- */
 function renderConcil(){
-  const hojas = BOLSAS.filter(b=>!esPadre(b.b));
+  const hojas = BOLSAS.filter(b=>!esPadre(b.b) || VER[b.b]);
   const est = hojas.map(b=>({b:b.b, ...semaforo(b.b)}));
   const mal  = est.filter(x=>x.st==='bad');
   const tibio= est.filter(x=>x.st==='warn' && !x.vieja);
@@ -7505,6 +7535,23 @@ $('#bsaCerrar').onclick = cerrarBolsa;
 $('#slConcil').onclick = e => { const b=e.target.closest('[data-conc]');
   if (b) abrirBolsa(b.dataset.conc); };
 $('#slList').onclick = e => {
+  const concBtn = e.target.closest('[data-conc]');
+  if (concBtn){
+    e.stopPropagation();
+    abrirBolsa(concBtn.dataset.conc);
+    return;
+  }
+  const concProp = e.target.closest('[data-conc-propio]');
+  if (concProp){
+    e.stopPropagation();
+    abrirBolsaPropio(concProp.dataset.concPropio);
+    return;
+  }
+  const elPropio = e.target.closest('[data-b-propio]');
+  if (elPropio){
+    abrirBolsaPropio(elPropio.dataset.bPropio);
+    return;
+  }
   const el = e.target.closest('[data-b]'); if(!el) return;
   const b = el.dataset.b;
   if (hijos(b).length){
