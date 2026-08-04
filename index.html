@@ -1236,7 +1236,7 @@ input[type=text],input[type=number],input[type=date],select{
       <label>Naturaleza</label>
       <select id="nrNat">
         <option>Hábito</option><option>Evento</option>
-        <option>Comprometido</option><option>Deuda</option><option>Ahorro</option>
+        <option>Comprometido</option><option>Ingreso</option><option>Deuda</option><option>Ahorro</option>
       </select>
     </div>
     <p class="note" style="margin-bottom:10px">La <b>categoría</b> agrupa para mirar
@@ -1285,7 +1285,8 @@ input[type=text],input[type=number],input[type=date],select{
     <button data-k="4">4</button><button data-k="5">5</button><button data-k="6">6</button>
     <button data-k="7">7</button><button data-k="8">8</button><button data-k="9">9</button>
   </div>
-  <div class="keys-bottom" style="display:grid;grid-template-columns:repeat(4,1fr);gap:11px;margin-top:11px;margin-bottom:9px">
+  <div class="keys-bottom" style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-top:11px;margin-bottom:9px">
+    <button data-k="±" class="sm" title="Cambiar signo (ingreso / devolución)">±</button>
     <button data-k="000" class="sm">000</button>
     <button data-k="0">0</button>
     <button data-k="," class="sm">,</button>
@@ -1746,8 +1747,10 @@ function trmDe(c){
 function montoEn(cur, n){
   const s = simbolo(cur);
   if (cur==='COP') return money(n);
-  return s + new Intl.NumberFormat('es-CO',{minimumFractionDigits:2,
-    maximumFractionDigits:2}).format(n||0);
+  const abs = Math.abs(n||0);
+  const sign = (n||0) < 0 ? '-' + s : s;
+  return sign + new Intl.NumberFormat('es-CO',{minimumFractionDigits:2,
+    maximumFractionDigits:2}).format(abs);
 }
 
 /* ---------- estado ---------- */
@@ -2159,19 +2162,23 @@ function drawAmt(){
   padCupo();
   const el = $('#padAmt');
   const cur = monedaDe(pad.bolsa);
-  const n = +pad.v||0;
+  const isNeg = pad.v.startsWith('-');
+  const raw = isNeg ? pad.v.slice(1) : pad.v;
+  const n = +pad.v || 0;
 
-  if (!pad.v){
-    el.textContent = simbolo(cur) + '0';
+  if (!pad.v || pad.v === '-'){
+    el.textContent = (isNeg ? '-' : '') + simbolo(cur) + '0';
     el.classList.add('zero');
+    el.style.color = isNeg ? 'var(--ok)' : '';
   } else {
     el.classList.remove('zero');
-    if (pad.v.includes('.')){
-      const [i, d] = pad.v.split('.');
+    el.style.color = isNeg ? 'var(--ok)' : '';
+    if (raw.includes('.')){
+      const [i, d] = raw.split('.');
       const formattedInt = new Intl.NumberFormat('es-CO').format(+i || 0);
-      el.textContent = simbolo(cur) + formattedInt + ',' + d;
+      el.textContent = (isNeg ? '-' : '') + simbolo(cur) + formattedInt + ',' + d;
     } else {
-      el.textContent = montoEn(cur, n);
+      el.textContent = (isNeg && n === 0 ? '-' : '') + montoEn(cur, n);
     }
   }
 
@@ -2183,14 +2190,25 @@ function drawAmt(){
   }
 }
 function key(k){
-  if (k==='del') pad.v = pad.v.slice(0,-1);
+  if (k==='±'){
+    if (pad.v.startsWith('-')) pad.v = pad.v.slice(1);
+    else if (pad.v !== '' && pad.v !== '0') pad.v = '-' + pad.v;
+    else pad.v = '-';
+  }
+  else if (k==='del'){
+    pad.v = pad.v.slice(0,-1);
+    if (pad.v === '-') pad.v = '';
+  }
   else if (k===','){ if (!pad.v.includes('.')) pad.v = (pad.v||'0')+'.'; }
   else if (pad.v.includes('.')){
     if (k==='000') return;
     if (pad.v.split('.')[1].length < 2) pad.v += k;
   }
-  else if (k==='000') pad.v = pad.v ? pad.v+'000' : '';
-  else pad.v = (pad.v+k).replace(/^0+(?=\d)/,'').slice(0,10);
+  else if (k==='000') pad.v = (pad.v && pad.v !== '-') ? pad.v+'000' : '';
+  else {
+    if (pad.v === '-') pad.v = '-' + k;
+    else pad.v = (pad.v+k).replace(/^-?0+(?=\d)/, m=>m.startsWith('-')?'-':'').slice(0, 11);
+  }
   drawAmt();
 }
 
@@ -2306,7 +2324,7 @@ function renderReg(){
   renderChips();
   const q = sinTilde(renderReg.q).trim();
   const cat = renderReg.cat || '';
-  let lista = S.rubros.filter(r=>r.nat!=='Ingreso' && r.nat!=='Nómina');
+  let lista = S.rubros.filter(r=>r.nat!=='Nómina');
   if (cat) lista = lista.filter(r=>(r.cat||'')===cat);
   if (q) lista = lista.filter(r=>sinTilde(r.n).includes(q)
                               || sinTilde(r.cat).includes(q)
@@ -2315,16 +2333,16 @@ function renderReg(){
 
   const ficha = r => {
     const e = estado(r.n, ym);
+    const isIng = r.nat === 'Ingreso';
     const pct = e.p>0 ? Math.min(100, e.e/e.p*100) : 0;
     const cls = e.p===0 ? '' : e.e>e.p ? 'over' : (e.e > e.ritmo + 0.15*e.p ? 'near' : '');
     const c = conCandado(r.n) ? cupoOcio(r.n, ym) : null;
     const v = c ? c.puede : e.disp;
-    const txt = e.p>0 ? money(v) : '—';
-    return `<button class="tile ${cls}" data-r="${r.n}">
-      <span class="tile-n">${r.n}${c?' <em class="cand">◈</em>':''}</span>
+    const txt = isIng ? (e.e > 0 ? '+' + money(e.e) : 'Ingreso') : (e.p>0 ? money(v) : '—');
+    return `<button class="tile ${cls}${isIng?' ing':''}" data-r="${r.n}">
+      <span class="tile-n">${r.n}${c?' <em class="cand">◈</em>':''}${isIng?' <em style="font-style:normal;color:var(--ok);font-size:10px">·ingreso</em>':''}</span>
       <span class="tile-v mono${v<0?' neg':''}">${txt}</span>
-      <span class="tile-bar"><i style="width:${pct}%"></i>${
-        c && c.frac<1 ? `<s style="left:${c.frac*100}%"></s>` : ''}</span>
+      <span class="tile-bar"><i style="width:${isIng?100:pct}%;background:${isIng?'var(--ok)':''}"></i></span>
     </button>`;
   };
 
@@ -2341,7 +2359,7 @@ function renderReg(){
   } else if (!q && !cat && !renderReg.todos){
     /* vista por defecto: 3 frecuentes como tiles + dropdown para el resto */
     const top3 = lista.slice(0,3);
-    const resto = S.rubros.filter(r=>r.nat!=='Ingreso' && r.nat!=='Nómina')
+    const resto = S.rubros.filter(r=>r.nat!=='Nómina')
       .filter(r=>!top3.some(t=>t.n===r.n))
       .sort((a,b)=>a.n.localeCompare(b.n,'es'));
     html = top3.map(ficha).join('')
@@ -3426,7 +3444,7 @@ async function editarMov(mInput){
 
   /* armar la lista de rubros para el select */
   const rubroOpts = S.rubros
-    .filter(r=>r.nat!=='Ingreso' && r.nat!=='Nómina')
+    .filter(r=>r.nat!=='Nómina')
     .sort((a,b)=>a.n.localeCompare(b.n,'es'))
     .map(r=>`<option value="${r.n}"${r.n===m.r?' selected':''}>${r.n} · ${r.nat}</option>`)
     .join('');
@@ -6773,7 +6791,7 @@ function renderHome(){
   $('#hoL2').textContent = Math.round(pc*100)+'% del mes';
 
   /* --- accesos de registro --- */
-  let top = S.rubros.filter(r=>r.nat!=='Ingreso' && r.nat!=='Nómina' && r.uso>0).slice(0,7);
+  let top = S.rubros.filter(r=>r.nat!=='Nómina' && r.uso>0).slice(0,7);
   if (libre.si){   /* en día libre, los rubros de ocio saltan al frente */
     const oc = ocioR.map(n=>RB[n]).filter(Boolean);
     top = [...oc, ...top.filter(r=>!ocioR.includes(r.n))].slice(0,7);
@@ -7741,6 +7759,7 @@ document.addEventListener('keydown', e => {
     return;
   }
   if (/^[0-9]$/.test(e.key)) key(e.key);
+  else if (e.key==='-' || e.key==='_') key('±');
   else if (e.key==='Backspace') key('del');
   else if (e.key==='Enter') guardar();
   else if (e.key==='Escape') closePad();
@@ -7770,7 +7789,7 @@ async function boot(){
   /* aplicar ediciones de naturaleza (local por dispositivo) */
   if (hayDatos() && CFG.rubrosNatEdit){
     for (const [n, nat] of Object.entries(CFG.rubrosNatEdit)){
-      if (RB[n] && NAT_PTO.includes(nat)) RB[n].nat = nat;
+      if (RB[n] && (NAT_PTO.includes(nat) || nat === 'Ingreso')) RB[n].nat = nat;
     }
   }
   MOV = await DB.all('mov');
