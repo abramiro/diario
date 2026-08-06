@@ -69,17 +69,20 @@ section.on{display:block;animation:fi .15s ease}
   font-weight:600;padding-right:76px}
 /* El avatar vive en la esquina, encima del círculo decorativo. Las dos
    primeras líneas de texto le dejan sitio para que nunca se pisen. */
-.hero2 .ava{position:absolute;top:14px;right:14px;width:70px;z-index:2;text-align:center}
-.hero2 .ava .fig{height:56px}
-.hero2 .ava svg{width:56px;height:56px;display:block;margin:0 auto}
-.hero2 .ava .et{font-size:9.5px;font-weight:700;letter-spacing:.06em;
-  text-transform:uppercase;margin-top:2px;line-height:1.2}
-.hero2 .ava.fiesta{color:var(--acc2)}
-.hero2 .ava.austero{color:var(--warn)}
-.hero2 .ava.casita{color:var(--ok)}
-.hero2 .ava .et{color:currentColor}
-@media(max-width:340px){ .hero2 .ava{width:56px} .hero2 .ava svg{width:46px;height:46px}
-  .hero2 .ava .fig{height:46px} .hero2 .k{padding-right:62px} }
+.hero2 .ava{position:absolute;top:12px;right:12px;width:76px;z-index:2;text-align:center;
+  background:rgba(26,32,44,0.75);backdrop-filter:blur(8px);border:1px solid var(--line2);
+  border-radius:14px;padding:6px 4px 5px;box-shadow:0 4px 12px rgba(0,0,0,0.3);
+  transition:transform .2s ease, border-color .2s ease}
+.hero2 .ava:hover{transform:scale(1.04)}
+.hero2 .ava .fig{height:42px;display:flex;align-items:center;justify-content:center}
+.hero2 .ava svg{width:38px;height:38px;display:block;margin:0 auto;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.4))}
+.hero2 .ava .et{font-size:8.5px;font-weight:750;letter-spacing:.06em;
+  text-transform:uppercase;margin-top:3px;line-height:1.1;color:currentColor}
+.hero2 .ava.fiesta{color:#a78bfa;border-color:rgba(167,139,250,0.45);background:rgba(139,107,255,0.12)}
+.hero2 .ava.austero{color:#fbbf24;border-color:rgba(251,191,36,0.45);background:rgba(245,181,68,0.12)}
+.hero2 .ava.casita{color:#34d399;border-color:rgba(52,211,153,0.45);background:rgba(55,211,153,0.12)}
+@media(max-width:340px){ .hero2 .ava{width:64px} .hero2 .ava svg{width:32px;height:32px}
+  .hero2 .ava .fig{height:34px} .hero2 .k{padding-right:62px} }
 .hero2 .n{font-size:36px;font-weight:690;letter-spacing:-.035em;line-height:1.05;margin:6px 0 2px;
   font-variant-numeric:tabular-nums}
 .hero2 .c{font-size:13px;color:var(--tx2);padding-right:76px}
@@ -436,11 +439,11 @@ section.on{display:block;animation:fi .15s ease}
 #pad .keys{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;
   flex:0 0 auto;margin-bottom:9px}
 #pad .keys{gap:11px}
-#pad .keys button{background:var(--bg2);border:0;border-radius:15px;
+#pad .keys button, #pad .keys-bottom button{background:var(--bg2);border:0;border-radius:15px;
   font-size:25px;font-weight:520;padding:clamp(11px,2.1vh,18px) 0;
   transition:background .1s,transform .1s}
-#pad .keys button:active{background:var(--bg4);transform:scale(.95)}
-#pad .keys .sm{font-size:14px;color:var(--tx2);font-weight:560}
+#pad .keys button:active, #pad .keys-bottom button:active{background:var(--bg4);transform:scale(.95)}
+#pad .keys .sm, #pad .keys-bottom .sm{font-size:14px;color:var(--tx2);font-weight:560}
 #pad input.note{width:100%;background:var(--bg2);border:1px solid var(--line);
   border-radius:12px;padding:11px 14px;color:var(--tx);margin-bottom:10px;font-size:14px;
   flex:0 0 auto}
@@ -818,7 +821,8 @@ input[type=text],input[type=number],input[type=date],select{
 <section id="v-act">
   <div class="segrow" id="segAct">
     <button class="seg on" data-av="sal">Saldos</button>
-    <button class="seg" data-av="ren">Rentabilidad</button>
+    <button class="seg" data-av="pre">Préstamos</button>
+    <button class="seg" data-av="ren">Inversiones</button>
     <button class="seg" data-av="pen">Pensión</button>
   </div>
 
@@ -847,6 +851,13 @@ input[type=text],input[type=number],input[type=date],select{
       </div>
       <div id="slConcil"></div>
     </div>
+    <div class="card" id="cardSlPto">
+      <div class="f" style="margin-bottom:10px">
+        <h3 style="flex:1;margin:0">Estado de Presupuestos</h3>
+        <span id="slPtoSem" class="sem gris"><i></i>—</span>
+      </div>
+      <div id="slPtoControl"></div>
+    </div>
     <div class="card"><div id="slList"></div></div>
     <div class="card">
       <h3>Verificar</h3>
@@ -858,7 +869,23 @@ input[type=text],input[type=number],input[type=date],select{
     </div>
   </div>
 
-  <div id="vRen">
+  <!-- ============ MÓDULO CONSOLIDADO DE PRÉSTAMOS ============ -->
+  <div id="vPre" style="display:none">
+    <div class="card" style="background:var(--bg3);border-color:var(--acc)">
+      <div class="f" style="margin-bottom:8px">
+        <h3 style="flex:1;margin:0;color:var(--tx);font-size:15px">Módulo Consolidado de Préstamos</h3>
+        <button class="chipbtn on" id="btnPreNuevo">＋ Nuevo / Simular</button>
+      </div>
+      <p class="note" style="margin-bottom:0">Gestión centralizada de préstamos a terceros, simulaciones en borrador, registro y edición de cuotas, amortización y envío por correo.</p>
+    </div>
+
+    <div class="card">
+      <h3>Tus Préstamos</h3>
+      <div id="preList"></div>
+    </div>
+  </div>
+
+  <div id="vRen" style="display:none">
   <div class="card">
     <div class="f" style="align-items:flex-end">
       <div style="flex:1">
@@ -890,15 +917,7 @@ input[type=text],input[type=number],input[type=date],select{
   </div>
 
   <div class="card">
-    <div class="f" style="margin-bottom:10px">
-      <h3 style="flex:1;margin:0">Préstamos</h3>
-      <button class="chipbtn" id="btnPreNuevo">Nuevo / calcular</button>
-    </div>
-    <div id="preList"></div>
-  </div>
-
-  <div class="card">
-    <h3>Cartera</h3>
+    <h3>Cartera de Inversiones</h3>
     <div id="aList"></div>
   </div>
 
@@ -998,8 +1017,17 @@ input[type=text],input[type=number],input[type=date],select{
   </div>
 </section>
 
-<!-- ============ AJUSTES ============ -->
 <section id="v-cfg">
+  <div class="card" style="background:var(--acc);color:#fff;padding:12px 16px;margin-bottom:12px">
+    <div class="f" style="align-items:center;gap:12px">
+      <div style="flex:1">
+        <b style="font-size:14px">Actualización PWA de la App</b>
+        <div style="font-size:11.5px;opacity:.9;margin-top:2px">Toca este botón para forzar la descarga de los últimos cambios y botones.</div>
+      </div>
+      <button onclick="desinstalarSW()" style="background:#fff;color:var(--acc);border:none;border-radius:8px;padding:8px 14px;font-weight:700;font-size:12.5px;cursor:pointer;flex:0 0 auto">🔄 Actualizar App</button>
+    </div>
+  </div>
+
   <div class="card">
     <div class="f" style="margin-bottom:10px">
       <h3 style="flex:1;margin:0">Base de datos</h3>
@@ -1093,6 +1121,26 @@ input[type=text],input[type=number],input[type=date],select{
       hace que se pierdan en silencio.</p>
   </div>
 
+  <div class="card" id="cfNominaCard">
+    <div class="f" style="margin-bottom:8px">
+      <h3 style="flex:1;margin:0">Plantilla de Nómina / Desprendible</h3>
+      <button class="chipbtn on" id="btnNomWiz">⚡ Cargar Desprendible</button>
+    </div>
+    <p class="note" style="margin-bottom:12px">Valores habituales de tu comprobante de nómina para el registro rápido mensual, devengos, deducciones y depósito del neto.</p>
+    <div id="cfNominaBody"></div>
+    <button class="primary" id="btnNomGuardar" style="margin-top:10px">Guardar Plantilla de Nómina</button>
+  </div>
+
+  <div class="card" id="cfFacturasCard">
+    <div class="f" style="margin-bottom:8px">
+      <h3 style="flex:1;margin:0">Facturas de Servicios (JSON OneDrive)</h3>
+      <button class="chipbtn on" id="btnImpFacturas">Subir JSON</button>
+    </div>
+    <input type="file" id="fileFacturas" accept=".json" style="display:none">
+    <p class="note" style="margin-bottom:12px">Fechas de vencimiento y montos de facturas de servicios públicos y telefonía generados por el agente externo.</p>
+    <div id="cfFacturasBody"></div>
+  </div>
+
   <div class="card">
     <h3>Monedas</h3>
     <p class="note" style="margin-bottom:12px">Tres bolsas no están en pesos:
@@ -1126,6 +1174,7 @@ input[type=text],input[type=number],input[type=date],select{
     <div id="odEstado"></div>
     <button class="primary" id="btnOdCon" style="margin:10px 0 8px">Conectar OneDrive</button>
     <button class="primary gray" id="btnOdSync" style="margin-bottom:8px">Sincronizar ahora</button>
+    <button class="primary gray" id="btnOdReemplazar" style="margin-bottom:8px">Restablecer datos desde OneDrive</button>
     <button class="primary gray" id="btnOdBase" style="margin-bottom:8px">Subir la base a OneDrive</button>
     <button class="primary gray" id="btnOdOut" style="margin-bottom:10px">Desconectar</button>
     <details>
@@ -1165,9 +1214,18 @@ input[type=text],input[type=number],input[type=date],select{
   </div>
 
   <div class="card">
+    <h3 style="margin:0 0 10px">Inspección y Reparación de BD</h3>
+    <p class="note" style="margin-bottom:12px">Herramientas directas para inspeccionar la base de datos local (VER y PTO), modificar verificaciones y corregir descuadres:</p>
+    <button class="primary" id="btnInspectorBD" style="margin-bottom:8px">Inspeccionar registros en BD (Detalle de descuadres)</button>
+    <button class="primary gray" id="btnRepararConc" style="margin-bottom:8px">Limpiar descuadres de conciliación (bolsas en rojo)</button>
+    <button class="primary gray" id="btnCalibrarPto" style="margin-bottom:8px">Asignar cuotas a presupuestos excedidos</button>
+  </div>
+
+  <div class="card">
     <h3>Presupuesto del mes</h3>
     <p class="note" style="margin-bottom:10px">Editá los montos del mes visible. Vacío = usar el valor calibrado.</p>
     <div id="cfPto"></div>
+  </div>
   </div>
 
   <div class="card">
@@ -1176,6 +1234,7 @@ input[type=text],input[type=number],input[type=date],select{
       <button class="chipbtn" id="btnNuevaCta">Nueva cuenta</button>
       <button class="chipbtn" id="btnNuevoBol">Nuevo bolsillo</button>
     </div>
+    <button class="primary gray" id="btnLimpiarTrii" style="margin-bottom:12px;font-size:12.5px">Agrupar / Limpiar bolsillos duplicados de Trii</button>
     <div id="cfBolsas"></div>
     <p class="note" style="margin-top:10px">Un <b>bolsillo</b> es una subdivisión de una
       cuenta: el saldo de la cuenta es la suma de sus bolsillos. Tocá uno para renombrarlo
@@ -1196,7 +1255,7 @@ input[type=text],input[type=number],input[type=date],select{
       <label>Naturaleza</label>
       <select id="nrNat">
         <option>Hábito</option><option>Evento</option>
-        <option>Comprometido</option><option>Deuda</option><option>Ahorro</option>
+        <option>Comprometido</option><option>Ingreso</option><option>Deuda</option><option>Ahorro</option>
       </select>
     </div>
     <p class="note" style="margin-bottom:10px">La <b>categoría</b> agrupa para mirar
@@ -1234,7 +1293,7 @@ input[type=text],input[type=number],input[type=date],select{
   <div id="padMedio">
   <div class="lbl mono" id="padConv" style="text-align:right;margin:-4px 0 8px;color:var(--warn);display:none"></div>
   <div class="lbl" id="padCupo" style="text-align:right;margin:-2px 0 8px;display:none"></div>
-  <div class="meta" id="padBolsas"></div>
+  <div id="padBolsas" style="margin-bottom:10px"></div>
   <input type="datetime-local" id="padDT" style="display:none;width:100%;max-width:none;
     margin-bottom:10px;background:var(--bg2);border:1px solid var(--acc);border-radius:12px;
     padding:12px 14px;color:var(--tx);font-size:15px">
@@ -1244,7 +1303,12 @@ input[type=text],input[type=number],input[type=date],select{
     <button data-k="1">1</button><button data-k="2">2</button><button data-k="3">3</button>
     <button data-k="4">4</button><button data-k="5">5</button><button data-k="6">6</button>
     <button data-k="7">7</button><button data-k="8">8</button><button data-k="9">9</button>
-    <button data-k="000" class="sm">000</button><button data-k="0">0</button>
+  </div>
+  <div class="keys-bottom" style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-top:11px;margin-bottom:9px">
+    <button data-k="±" class="sm" title="Cambiar signo (ingreso / devolución)">±</button>
+    <button data-k="000" class="sm">000</button>
+    <button data-k="0">0</button>
+    <button data-k="," class="sm">,</button>
     <button data-k="del" class="sm">borrar</button>
   </div>
   <button class="primary" id="padSave">Guardar</button>
@@ -1280,6 +1344,18 @@ input[type=text],input[type=number],input[type=date],select{
   <div class="wz-track"><i id="wizProg" style="width:0%"></i></div>
   <div id="wizCuerpo"></div>
   <div id="wizPie"></div>
+</div>
+
+<div id="wizNomina" style="position:fixed;inset:0;z-index:85;background:var(--bg);display:none;
+     flex-direction:column;padding:calc(12px + env(safe-area-inset-top)) var(--pad) calc(14px + env(safe-area-inset-bottom));overflow:auto">
+  <div class="wz-top">
+    <button class="chipbtn" id="wnSalir">Cancelar</button>
+    <div style="flex:1;text-align:center;font-weight:600;font-size:14px">Registro de Nómina / Desprendible</div>
+    <div class="p" id="wnPaso">—</div>
+  </div>
+  <div class="wz-track"><i id="wnProg" style="width:0%"></i></div>
+  <div id="wnCuerpo" style="flex:1;margin-top:14px"></div>
+  <div id="wnPie" style="padding-top:12px"></div>
 </div>
 
 <div id="bed" style="position:fixed;inset:0;z-index:78;background:var(--bg);display:none;
@@ -1530,7 +1606,7 @@ input[type=text],input[type=number],input[type=date],select{
 <div id="toast"></div>
 <script>
 'use strict';
-const VERSION = '2026.07.30-22';   /* subí esto en cada cambio publicado */
+const VERSION = '2026.08.06-10';   /* subí esto en cada cambio publicado */
 /* ===================================================================
    Diario · Presupuesto — PWA local-first
    Los datos viven en IndexedDB en este dispositivo. Nada sale de acá
@@ -1560,12 +1636,119 @@ const MESNOM = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov
 const MESLAR = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto',
   'septiembre','octubre','noviembre','diciembre'];
 
+const DEFAULT_NOMINA = {
+  empresa: 'HITSS COLOMBIA SAS',
+  basico: 17443000,
+  bolsaNeto: '',
+  devengos: [
+    { cod: 'M010', n: 'Sueldo Básico', v: 17443000, cat: 'Nómina', nat: 'Ingreso' },
+    { cod: '1M88', n: 'Ant. Prima Legal', v: 1453583, cat: 'Nómina', nat: 'Ingreso' },
+    { cod: '1M89', n: 'Ant. Intereses Cesantías', v: 174430, cat: 'Nómina', nat: 'Ingreso' }
+  ],
+  deducciones: [
+    { cod: 'T000', n: 'Descuento Salud', v: 697720, cat: 'Servicios', nat: 'Comprometido' },
+    { cod: 'T010', n: 'Descuento Pensión', v: 697720, cat: 'Servicios', nat: 'Comprometido' },
+    { cod: 'T020', n: 'Descuento Solidaridad', v: 174430, cat: 'Servicios', nat: 'Comprometido' },
+    { cod: 'T050', n: 'Retención en la Fuente', v: 1962000, cat: 'Impuestos', nat: 'Comprometido' },
+    { cod: '2T49', n: 'Desc.Med.Prepag.Medisánit', v: 316972, cat: 'Salud', nat: 'Comprometido' },
+    { cod: '2T30', n: 'Aportes FECC', v: 60000, cat: 'Ahorro', nat: 'Ahorro' },
+    { cod: '2T09', n: 'Serv. Claro fijo', v: 12000, cat: 'Servicios', nat: 'Comprometido' }
+  ]
+};
+
+function getCfgNomina(){
+  if (CFG.nomina && typeof CFG.nomina === 'object') return CFG.nomina;
+  return DEFAULT_NOMINA;
+}
+
+/* ---------- cálculo de días hábiles y festivos en Colombia ---------- */
+function calcularPascua(year){
+  const a = year % 19, b = Math.floor(year / 100), c = year % 100;
+  const d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3), h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const month = Math.floor((h + l - 7 * m + 114) / 31);
+  const day = ((h + l - 7 * m + 114) % 31) + 1;
+  return new Date(year, month - 1, day);
+}
+
+function moverLunes(fecha){
+  const day = fecha.getDay();
+  if (day === 1) return fecha;
+  const diff = (8 - day) % 7;
+  const res = new Date(fecha);
+  res.setDate(res.getDate() + diff);
+  return res;
+}
+
+function festivosCO(year){
+  const list = [];
+  const addF = d => list.push(d.toISOString().slice(0,10));
+  addF(new Date(year, 0, 1));
+  addF(new Date(year, 4, 1));
+  addF(new Date(year, 6, 20));
+  addF(new Date(year, 7, 7));
+  addF(new Date(year, 11, 8));
+  addF(new Date(year, 11, 25));
+  addF(moverLunes(new Date(year, 0, 6)));
+  addF(moverLunes(new Date(year, 2, 19)));
+  addF(moverLunes(new Date(year, 5, 29)));
+  addF(moverLunes(new Date(year, 7, 15)));
+  addF(moverLunes(new Date(year, 9, 12)));
+  addF(moverLunes(new Date(year, 10, 1)));
+  addF(moverLunes(new Date(year, 10, 11)));
+  const pascua = calcularPascua(year);
+  const addRel = offset => {
+    const d = new Date(pascua);
+    d.setDate(d.getDate() + offset);
+    addF(d);
+  };
+  addRel(-3); addRel(-2); addRel(43); addRel(64); addRel(71);
+  return list;
+}
+
+const FESTIVOS_CACHE = {};
+function esFestivoCO(fechaStr){
+  const y = +fechaStr.slice(0,4);
+  if (!FESTIVOS_CACHE[y]) FESTIVOS_CACHE[y] = festivosCO(y);
+  return FESTIVOS_CACHE[y].includes(fechaStr.slice(0,10));
+}
+
+function esDiaHabil(fechaStr){
+  const d = new Date(fechaStr + 'T12:00:00');
+  const day = d.getDay();
+  if (day === 0 || day === 6) return false;
+  return !esFestivoCO(fechaStr);
+}
+
+function diasHabilesEntre(d1Str, d2Str){
+  if (d1Str === d2Str) return 0;
+  let d1 = new Date(d1Str + 'T12:00:00');
+  let d2 = new Date(d2Str + 'T12:00:00');
+  if (d1 > d2) return -diasHabilesEntre(d2Str, d1Str);
+  let count = 0;
+  let curr = new Date(d1);
+  curr.setDate(curr.getDate() + 1);
+  while (curr <= d2){
+    const day = curr.getDay();
+    const iso = curr.toISOString().slice(0,10);
+    if (day !== 0 && day !== 6 && !esFestivoCO(iso)){
+      count++;
+    }
+    curr.setDate(curr.getDate() + 1);
+  }
+  return count;
+}
+
 const CFG_DEF = {
   lifeup:false, lifeModo:'tarea', coin:1, tasa:5000, exp:10, skills:'',
   tarea:'Registrar movimiento',
   url:'', neto:0, baseHasta:'2026-07', nombre:'', ocio:'Weekend,Recreación',
   monedas:0, monedasF:'', monedasRef:0,
-  trmEUR:0, trmUSD:0, hurdle:0.168, odClient:''
+  trmEUR:0, trmUSD:0, hurdle:0.168, odClient:'',
+  nomina: DEFAULT_NOMINA,
+  facturasServicios: { updatedAt: null, facturas: [] }
 };
 
 /* --------- monedas ---------
@@ -1583,12 +1766,14 @@ function trmDe(c){
 function montoEn(cur, n){
   const s = simbolo(cur);
   if (cur==='COP') return money(n);
-  return s + new Intl.NumberFormat('es-CO',{minimumFractionDigits:2,
-    maximumFractionDigits:2}).format(n||0);
+  const abs = Math.abs(n||0);
+  const sign = (n||0) < 0 ? '-' + s : s;
+  return sign + new Intl.NumberFormat('es-CO',{minimumFractionDigits:2,
+    maximumFractionDigits:2}).format(abs);
 }
 
 /* ---------- estado ---------- */
-let MOV=[], PTO={}, OBJ=[], CFG={...CFG_DEF}, FH=null;
+let MOV=[], PTO={}, PTO_TS={}, OBJ=[], CFG={...CFG_DEF}, FH=null;
 let view='home', ym=null, pad={r:null,v:'',bolsa:null,dt:null};
 
 /* ---------- utilidades ---------- */
@@ -1599,7 +1784,17 @@ const INERTE = new Proxy({}, {get:()=>()=>{}, set:()=>true});
 const $ = s => document.querySelector(s) || INERTE;
 const $$real = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
-const money = n => (n<0?'-$':'$') + nf.format(Math.abs(Math.round(n||0)));
+const money = n => {
+  if (n == null || isNaN(n)) return '$0';
+  const abs = Math.abs(n);
+  const sign = n < 0 ? '-$' : '$';
+  const hasDec = Math.abs(abs % 1) > 0.001;
+  const fmt = new Intl.NumberFormat('es-CO', {
+    minimumFractionDigits: hasDec ? 2 : 0,
+    maximumFractionDigits: 2
+  }).format(abs);
+  return sign + fmt;
+};
 const uuid = () => (crypto.randomUUID ? crypto.randomUUID()
   : 'x'+Date.now().toString(36)+Math.random().toString(36).slice(2,10));
 const pad2 = n => String(n).padStart(2,'0');
@@ -1651,7 +1846,9 @@ const DB = (()=>{
     async del(s,k){ const st=await tx(s,'readwrite');
       return new Promise(r=>{ const q=st.delete(k); q.onsuccess=()=>r(); }); },
     async get(s,k){ const st=await tx(s,'readonly');
-      return new Promise(r=>{ const q=st.get(k); q.onsuccess=()=>r(q.result); }); }
+      return new Promise(r=>{ const q=st.get(k); q.onsuccess=()=>r(q.result); }); },
+    async clear(s){ const st=await tx(s,'readwrite');
+      return new Promise(r=>{ const q=st.clear(); q.onsuccess=()=>r(); }); }
   };
 })();
 
@@ -1825,14 +2022,14 @@ async function guardar(){
   const orig = +pad.v;
   if (!orig){ toast('Poné un monto', true); return; }
   const r = pad.r;
-  const bolsa = bolsaHoja(pad.bolsa || (RB[r]?RB[r].bolsa:null) || 'Caja');
+  const bolsa = pad.bolsa || bolsaHoja((RB[r]?RB[r].bolsa:null) || 'Caja');
   const cur = monedaDe(bolsa), tasa = trmDe(cur);
   const dt = pad.dt || dtLocal(new Date());
   const f  = dt.slice(0,10);
   const m = { id:uuid(), fecha:f, hora:dt.slice(11,16), dt,
     ym: f.slice(0,7), r, bolsa,
     moneda: cur, valorOrig: orig, tasa,
-    valor: Math.round(orig*tasa), obs: $('#padObs').value.trim(), ts: Date.now() };
+    valor: Math.round(orig * tasa * 100) / 100, obs: $('#padObs').value.trim(), ts: Date.now() };
   const v = m.valor;
   MOV.push(m);
   await DB.put('mov', m);
@@ -1841,7 +2038,7 @@ async function guardar(){
   const e = estado(r, ym);
   let msg = (cur==='COP' ? money(v) : montoEn(cur,orig)+' = '+money(v))+' · '+r;
   if (f !== todayISO()) msg += ' · '+f;
-  if (e.p>0) msg += ' · quedan '+money(e.disp);
+  if (e.p>0) msg += e.disp<0 ? ' · excedido por '+money(Math.abs(e.disp)) : e.disp===0 ? ' · presupuesto agotado' : ' · quedan '+money(e.disp);
   toast(msg, e.p>0 && e.e>e.p);
   render();
   autoSave();
@@ -1879,37 +2076,105 @@ function openPad(r){
           dt: dtLocal(new Date()) };
   $('#padDT').style.display='none';
   padFechas();
-  $('#padRubro').textContent = r;
   const nat = RB[r] ? RB[r].nat : 'Hábito';
   $('#padNat').textContent = nat;
-  const e = estado(r, ym);
-  $('#padHint').textContent = e.p>0
-    ? money(e.e)+' de '+money(e.p)+' · quedan '+money(e.disp)
-    : 'sin presupuesto asignado';
+  if (nat === 'Evento'){
+    const s = sobreDe(r);
+    if (s.meta > 0 && s.ejec > s.meta){
+      const exc = s.ejec - s.meta;
+      $('#padRubro').innerHTML = `<span style="color:var(--bad);margin-right:5px" title="Meta de sobre excedida">🛑</span>` + r;
+      $('#padHint').textContent = `${money(s.ejec)} de ${money(s.meta)} (meta) · meta excedida por ${money(exc)}`;
+      $('#padHint').style.color = 'var(--bad)';
+    } else if (s.meta === 0 && s.ejec > 0){
+      $('#padRubro').innerHTML = `<span style="color:var(--bad);margin-right:5px" title="Sin cuota asignada">🛑</span>` + r;
+      $('#padHint').textContent = `${money(s.ejec)} gastados · sin cuota mensual asignada`;
+      $('#padHint').style.color = 'var(--bad)';
+    } else if (s.meta > 0){
+      const dispMeta = s.meta - s.ejec;
+      const adel = s.saldo < 0 ? ` · adelantado por ${money(Math.abs(s.saldo))}` : '';
+      $('#padRubro').textContent = r;
+      $('#padHint').textContent = `${money(s.ejec)} de ${money(s.meta)} (meta) · quedan ${money(dispMeta)}${adel}`;
+      $('#padHint').style.color = s.saldo < 0 ? 'var(--warn)' : 'var(--tx2)';
+    } else {
+      $('#padRubro').textContent = r;
+      $('#padHint').textContent = 'sin cuota asignada';
+      $('#padHint').style.color = 'var(--tx2)';
+    }
+  } else {
+    const e = estado(r, ym);
+    if (e.p > 0){
+      if (e.disp < 0){
+        $('#padRubro').innerHTML = `<span style="color:var(--bad);margin-right:5px" title="Presupuesto excedido">🛑</span>` + r;
+        $('#padHint').textContent = `${money(e.e)} de ${money(e.p)} · presupuesto agotado, excedido por ${money(Math.abs(e.disp))}`;
+        $('#padHint').style.color = 'var(--bad)';
+      } else if (e.disp === 0){
+        $('#padRubro').innerHTML = `<span style="color:var(--bad);margin-right:5px" title="Presupuesto agotado">🛑</span>` + r;
+        $('#padHint').textContent = `${money(e.e)} de ${money(e.p)} · presupuesto agotado`;
+        $('#padHint').style.color = 'var(--bad)';
+      } else {
+        $('#padRubro').textContent = r;
+        $('#padHint').textContent = `${money(e.e)} de ${money(e.p)} · quedan ${money(e.disp)}`;
+        $('#padHint').style.color = 'var(--tx2)';
+      }
+    } else {
+      $('#padRubro').textContent = r;
+      $('#padHint').textContent = 'sin presupuesto asignado';
+      $('#padHint').style.color = 'var(--tx2)';
+    }
+  }
   $('#padObs').value='';
   padCupo();
   /* la bolsa manda la moneda: se marca cuál no está en pesos */
   armarBolsas();
-  /* orden: primero las más usadas según la historia, luego sus bolsillos */
+  /* orden: primero las más usadas según movimientos reales */
+  const freq = {};
+  for (const m of MOV) if (vivo(m) && m.bolsa) freq[m.bolsa] = (freq[m.bolsa]||0) + 1;
   const rank = {}; S.bolsas.forEach((b,i)=>rank[b]=i);
-  const peso = b => b.padre != null
-    ? (rank[b.padre] ?? 90) + 0.5
-    : (rank[b.b] ?? 99);
+  const peso = b => {
+    const f = freq[b.b] || 0;
+    if (f > 0) return -f;                /* más usada primero */
+    if (b.padre != null) return (rank[b.padre] ?? 90) + 0.5;
+    return (rank[b.b] ?? 99);
+  };
   const usadas = new Set([...S.bolsas, ...Object.keys(S.monedaBolsa)]);
   const lista = BOLSAS
-    .filter(b=>!esPadre(b.b) && (usadas.has(b.b) || b.padre || b.grupo==='Disponible'))
+    .filter(b => usadas.has(b.b) || b.padre || b.grupo==='Disponible' || esPadre(b.b))
     .sort((a,b)=>peso(a)-peso(b));
-  $('#padBolsas').innerHTML = lista.map(b => {
+  const top3 = lista.slice(0, 3);
+  const resto = lista.slice(3).sort((a,b)=>nomB(a.b).localeCompare(nomB(b.b),'es'));
+
+  const btnHtml = top3.map(b => {
     const cur = monedaDe(b.b);
-    return `<button class="chipbtn${b.b===pad.bolsa?' on':''}" data-b="${b.b}">`
+    return `<button type="button" class="chipbtn${b.b===pad.bolsa?' on':''}" data-b="${b.b}" style="flex:1;min-width:0;justify-content:center;text-align:center;padding:8px 4px;font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">`
       + (b.padre ? `<em style="font-style:normal;opacity:.5">${nomB(b.padre)} · </em>` : '')
       + nomB(b.b)
+      + (esPadre(b.b) ? ' <em style="font-style:normal;opacity:.4;font-size:10px">·m</em>' : '')
       + (cur!=='COP' ? ` <b style="color:var(--warn)">${simbolo(cur)}</b>` : '')
       + `</button>`;
   }).join('');
-  /* la fila se desplaza de lado: hay que traer la bolsa activa a la vista */
-  const act = $$real('#padBolsas .chipbtn.on');
-  if (act && act.scrollIntoView) act.scrollIntoView({block:'nearest', inline:'center'});
+
+  const dropHtml = resto.length ? `<select id="padBolsaDrop" style="width:100%;padding:8px 12px;font-size:13px;background:var(--bg2);border:1px solid var(--line);border-radius:10px;color:var(--tx);margin-top:6px">
+    <option value="">Otras bolsas (${resto.length})…</option>
+    ${resto.map(b=>{
+      const cur = monedaDe(b.b);
+      const sel = b.b === pad.bolsa ? ' selected' : '';
+      return `<option value="${b.b}"${sel}>${b.padre?nomB(b.padre)+' · ':''}${nomB(b.b)}${esPadre(b.b)?' (madre)':''}${cur!=='COP'?' ('+cur+')':''}</option>`;
+    }).join('')}
+  </select>` : '';
+
+  $('#padBolsas').innerHTML = `<div style="display:flex;gap:6px">${btnHtml}</div>` + dropHtml;
+
+  const dropEl = $$real('#padBolsaDrop');
+  if (dropEl){
+    dropEl.onchange = e => {
+      const b = e.target.value;
+      if (b){
+        pad.bolsa = b;
+        $$('#padBolsas .chipbtn').forEach(x=>x.classList.toggle('on', x.dataset.b===b));
+        drawAmt();
+      }
+    };
+  }
   drawAmt();
   $('#pad').classList.add('on');
 }
@@ -1918,15 +2183,26 @@ function drawAmt(){
   padCupo();
   const el = $('#padAmt');
   const cur = monedaDe(pad.bolsa);
-  const n = +pad.v||0;
-  /* la tecla 000 solo tiene sentido en pesos; en otras monedas se vuelve coma */
-  const k000 = $$real('#pad .keys [data-k="000"], #pad .keys [data-k=","]');
-  if (k000){
-    const quiere = cur==='COP' ? '000' : ',';
-    if (k000.dataset.k !== quiere){ k000.dataset.k = quiere; k000.textContent = quiere; }
+  const isNeg = pad.v.startsWith('-');
+  const raw = isNeg ? pad.v.slice(1) : pad.v;
+  const n = +pad.v || 0;
+
+  if (!pad.v || pad.v === '-'){
+    el.textContent = (isNeg ? '-' : '') + simbolo(cur) + '0';
+    el.classList.add('zero');
+    el.style.color = isNeg ? 'var(--ok)' : '';
+  } else {
+    el.classList.remove('zero');
+    el.style.color = isNeg ? 'var(--ok)' : '';
+    if (raw.includes('.')){
+      const [i, d] = raw.split('.');
+      const formattedInt = new Intl.NumberFormat('es-CO').format(+i || 0);
+      el.textContent = (isNeg ? '-' : '') + simbolo(cur) + formattedInt + ',' + d;
+    } else {
+      el.textContent = (isNeg && n === 0 ? '-' : '') + montoEn(cur, n);
+    }
   }
-  el.textContent = montoEn(cur, n);
-  el.classList.toggle('zero', !pad.v);
+
   const conv = $('#padConv');
   if (cur==='COP'){ conv.textContent=''; conv.style.display='none'; }
   else {
@@ -1935,14 +2211,25 @@ function drawAmt(){
   }
 }
 function key(k){
-  if (k==='del') pad.v = pad.v.slice(0,-1);
-  else if (k==='000') pad.v = pad.v ? pad.v+'000' : '';
+  if (k==='±'){
+    if (pad.v.startsWith('-')) pad.v = pad.v.slice(1);
+    else if (pad.v !== '' && pad.v !== '0') pad.v = '-' + pad.v;
+    else pad.v = '-';
+  }
+  else if (k==='del'){
+    pad.v = pad.v.slice(0,-1);
+    if (pad.v === '-') pad.v = '';
+  }
   else if (k===','){ if (!pad.v.includes('.')) pad.v = (pad.v||'0')+'.'; }
   else if (pad.v.includes('.')){
-    /* máximo dos decimales; los euros no tienen milésimas */
+    if (k==='000') return;
     if (pad.v.split('.')[1].length < 2) pad.v += k;
   }
-  else pad.v = (pad.v+k).replace(/^0+(?=\d)/,'').slice(0,10);
+  else if (k==='000') pad.v = (pad.v && pad.v !== '-') ? pad.v+'000' : '';
+  else {
+    if (pad.v === '-') pad.v = '-' + k;
+    else pad.v = (pad.v+k).replace(/^-?0+(?=\d)/, m=>m.startsWith('-')?'-':'').slice(0, 11);
+  }
   drawAmt();
 }
 
@@ -2058,7 +2345,7 @@ function renderReg(){
   renderChips();
   const q = sinTilde(renderReg.q).trim();
   const cat = renderReg.cat || '';
-  let lista = S.rubros.filter(r=>r.nat!=='Ingreso' && r.nat!=='Nómina');
+  let lista = S.rubros.filter(r=>r.nat!=='Nómina');
   if (cat) lista = lista.filter(r=>(r.cat||'')===cat);
   if (q) lista = lista.filter(r=>sinTilde(r.n).includes(q)
                               || sinTilde(r.cat).includes(q)
@@ -2067,16 +2354,16 @@ function renderReg(){
 
   const ficha = r => {
     const e = estado(r.n, ym);
+    const isIng = r.nat === 'Ingreso';
     const pct = e.p>0 ? Math.min(100, e.e/e.p*100) : 0;
     const cls = e.p===0 ? '' : e.e>e.p ? 'over' : (e.e > e.ritmo + 0.15*e.p ? 'near' : '');
     const c = conCandado(r.n) ? cupoOcio(r.n, ym) : null;
     const v = c ? c.puede : e.disp;
-    const txt = e.p>0 ? money(v) : '—';
-    return `<button class="tile ${cls}" data-r="${r.n}">
-      <span class="tile-n">${r.n}${c?' <em class="cand">◈</em>':''}</span>
+    const txt = isIng ? (e.e > 0 ? '+' + money(e.e) : 'Ingreso') : (e.p>0 ? money(v) : '—');
+    return `<button class="tile ${cls}${isIng?' ing':''}" data-r="${r.n}">
+      <span class="tile-n">${r.n}${c?' <em class="cand">◈</em>':''}${isIng?' <em style="font-style:normal;color:var(--ok);font-size:10px">·ingreso</em>':''}</span>
       <span class="tile-v mono${v<0?' neg':''}">${txt}</span>
-      <span class="tile-bar"><i style="width:${pct}%"></i>${
-        c && c.frac<1 ? `<s style="left:${c.frac*100}%"></s>` : ''}</span>
+      <span class="tile-bar"><i style="width:${isIng?100:pct}%;background:${isIng?'var(--ok)':''}"></i></span>
     </button>`;
   };
 
@@ -2090,8 +2377,24 @@ function renderReg(){
       .sort((a,b)=>catNom(a[0]).localeCompare(catNom(b[0]),'es'))
       .map(([c,rs])=>`<div class="gcab">${catNom(c)}</div>`+rs.map(ficha).join(''))
       .join('');
+  } else if (!q && !cat && !renderReg.todos){
+    /* vista por defecto: 3 frecuentes como tiles + dropdown para el resto */
+    const top3 = lista.slice(0,3);
+    const resto = S.rubros.filter(r=>r.nat!=='Nómina')
+      .filter(r=>!top3.some(t=>t.n===r.n))
+      .sort((a,b)=>a.n.localeCompare(b.n,'es'));
+    html = top3.map(ficha).join('')
+      + (resto.length ? `<div style="margin:10px 0 4px">
+          <select id="regDrop" style="width:100%;padding:10px 12px;font-size:14px;
+            background:var(--bg2);border:1px solid var(--line);border-radius:10px;color:var(--tx)">
+            <option value="">Más rubros (${resto.length})…</option>
+            ${resto.map(r=>`<option value="${r.n}">${r.n} · ${r.nat}</option>`).join('')}
+          </select></div>` : '');
   } else html = lista.map(ficha).join('');
   $('#regGrid').innerHTML = html;
+  /* el dropdown abre el teclado directo al seleccionar */
+  const dd = $$real('#regDrop');
+  if (dd) dd.onchange = e => { if (e.target.value) openPad(e.target.value); e.target.value=''; };
 
   const cuando = m => (m.dt || (m.fecha+'T'+(m.hora||'00:00')));
   const ult = MOVV().sort((a,b)=> cuando(a)<cuando(b)?1:-1).slice(0,7);
@@ -2101,6 +2404,7 @@ function renderReg(){
       <div class="rec-t"><b>⇄ ${nomB(m.de)} → ${nomB(m.a)}</b>
         <span>${m.fecha===todayISO()?'hoy':m.fecha} · traslado${m.obs?' · '+m.obs:''}</span></div>
       <div class="rec-v mono" style="color:var(--tx2)">${money(m.valor)}</div>
+      <button class="chipbtn" data-edit="${m.id}" style="padding:2px 8px;font-size:11px;margin:0 4px">Editar</button>
       <button class="rec-x" data-del="${m.id}">&times;</button>
     </div>`;
     const cur = m.moneda && m.moneda!=='COP';
@@ -2109,6 +2413,7 @@ function renderReg(){
         <span>${m.fecha === todayISO() ? 'hoy' : m.fecha} · ${m.bolsa}${
           cur ? ' · '+montoEn(m.moneda, m.valorOrig) : ''}${m.obs ? ' · '+m.obs : ''}</span></div>
       <div class="rec-v mono">${money(m.valor)}</div>
+      <button class="chipbtn" data-edit="${m.id}" style="padding:2px 8px;font-size:11px;margin:0 4px">Editar</button>
       <button class="rec-x" data-del="${m.id}">&times;</button>
     </div>`;
   }).join('') : '<div class="vacio">Todavía no registraste nada en este dispositivo.</div>';
@@ -2458,36 +2763,25 @@ function padCupo(){
    cupo con monedas está encendido, manda el menor de los dos.
    ================================================================= */
 const AVA_SVG = {
-  fiesta: `<svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2.3"
-      stroke-linecap="round" stroke-linejoin="round">
-    <circle cx="32" cy="37" r="14"/>
-    <path d="M22 24.5 32 10l10 14.5"/>
-    <circle cx="32" cy="8" r="2.6" fill="currentColor" stroke="none"/>
-    <rect x="19" y="31" width="11" height="8.5" rx="3.5" fill="currentColor" stroke="none"/>
-    <rect x="34" y="31" width="11" height="8.5" rx="3.5" fill="currentColor" stroke="none"/>
-    <path d="M30 34.5h4"/>
-    <path d="M19 34.5l-4 1.5M45 34.5l4 1.5"/>
-    <path d="M25.5 44.5c3 3.6 10 3.6 13 0"/>
-    <path d="M7 30l3.5-1.5M57 30l-3.5-1.5M9 45l3.5 1M55 45l-3.5 1"/>
+  fiesta: `<svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M22 46l10-24 10 24" />
+    <path d="M16 28l-4-4M48 28l4-4M32 14v-6" />
+    <path d="M26 38h12" />
+    <circle cx="32" cy="18" r="3" fill="currentColor" />
+    <path d="M12 50c4 3 10 4 20 4s16-1 20-4" />
+    <path d="M20 18l-3-5M44 18l3-5" />
   </svg>`,
-  austero: `<svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2.3"
-      stroke-linecap="round" stroke-linejoin="round">
-    <circle cx="32" cy="26" r="14"/>
-    <path d="M26 23h.01M38 23h.01"/>
-    <path d="M27 32h10"/>
-    <path d="M19 47h16v8a5 5 0 0 1-5 5h-6a5 5 0 0 1-5-5z"/>
-    <path d="M35 49h3.5a3.5 3.5 0 0 1 0 7H35"/>
-    <path d="M24 43c0-2.5 2.5-2.5 2.5-5M30 43c0-2.5 2.5-2.5 2.5-5"/>
+  austero: `<svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M32 8l18 8v16c0 14-10 22-18 24C24 54 14 46 14 32V16l18-8z" />
+    <circle cx="32" cy="28" r="7" />
+    <path d="M32 24v8M28 28h8" />
+    <path d="M24 42c3 2 13 2 16 0" />
   </svg>`,
-  casita: `<svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2.3"
-      stroke-linecap="round" stroke-linejoin="round">
-    <path d="M45 15h6v9"/>
-    <path d="M48 11c0-3 3-3 3-6M54 11c0-3 3-3 3-6"/>
-    <path d="M5 31 32 9l27 22"/>
-    <path d="M12 28v27h40V28"/>
-    <circle cx="32" cy="40" r="10"/>
-    <path d="M28.5 37.5h.01M35.5 37.5h.01"/>
-    <path d="M28 43.5c2.2 2.5 5.8 2.5 8 0"/>
+  casita: `<svg viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M8 28L32 10l24 18" />
+    <path d="M14 24v26a4 4 0 004 4h28a4 4 0 004-4V24" />
+    <path d="M28 54V36a4 4 0 014-4h0a4 4 0 014 4v18" />
+    <circle cx="44" cy="20" r="3" fill="currentColor" />
   </svg>`
 };
 const AVA_ET = {fiesta:'Modo fiesta', austero:'Plan austero', casita:'Plan casita'};
@@ -2553,7 +2847,7 @@ function preCuadro(p){
   return {filas, prog, total, im,
     intTotal: filas.reduce((s,f)=>s+f.interes,0)};
 }
-const preCuotasPagas = p => FLU.filter(f=>f.actId===p.actId && f.tipo==='cuota').length;
+const preCuotasPagas = p => FLU.filter(f=>f.actId===p.actId && f.tipo==='cuota' && !f.borrado).length;
 const preVivos = () => PRE.filter(p=>!p.borrado);
 const actDeBolsa = nb => ACT.find(a=>a.bolsa===nb || a.n===nb) || null;
 
@@ -2562,7 +2856,11 @@ function preEstado(p){
   const c = preCuadro(p);
   const k = preCuotasPagas(p);
   const sig = c.filas[k] || null;
-  const saldo = k>0 ? (c.filas[k-1]?c.filas[k-1].fin:0) : p.monto;
+
+  /* El saldo por cobrar es el que marca el cuadro de amortización tras la
+     última cuota pagada. No se intenta reconstruir de los flujos porque las
+     cuotas antiguas no tienen el campo ref y el cálculo fallaba. */
+  const saldo = k > 0 ? (c.filas[k-1] ? Math.max(0, c.filas[k-1].fin) : 0) : p.monto;
   return {c, k, sig, saldo, listo: !sig};
 }
 
@@ -2576,6 +2874,19 @@ async function rubroRend(){
   S.rubros.unshift(r); RB[N]=r;
   await DB.put('cfg',{k:'rubrosExtra', v:S.rubros.filter(x=>x.nuevo)});
   return N;
+}
+
+/* asegura que un rubro exista; si no está, lo crea con su categoría y naturaleza */
+async function asegurarRubro(nombre, cat, nat, pto){
+  if (!nombre) return null;
+  const n = nombre.trim();
+  if (RB[n]) return RB[n];
+  const r = { n, cat: cat||'Nómina', nat: nat||'Comprometido', pto: pto||0, med6:0, med12:0, cv:null,
+    n12:0, tend:null, a:[0,0,0,0], anual:0, uso:1, bolsa: (S && S.bolsas && S.bolsas[0]) || 'Caja',
+    aviso:'', nuevo:true };
+  S.rubros.unshift(r); RB[n]=r;
+  await DB.put('cfg', {k:'rubrosExtra', v:S.rubros.filter(x=>x.nuevo)});
+  return r;
 }
 
 /* activo enlazado a una bolsa de inversión; se crea si no está */
@@ -2806,16 +3117,43 @@ function prPintar(){
     </div>`}
     ${!bor && preCuotasPagas(p)>0 ? `<button class="primary gray" id="prDeshacerBtn"
       style="margin-bottom:8px;color:var(--warn)">Deshacer la última cuota (${preCuotasPagas(p)})</button>`:''}
+    ${!bor && preCuotasPagas(p)>0 ? `<button class="primary gray" id="prLimpiarBtn"
+      style="margin-bottom:8px;color:var(--warn);font-size:12.5px">Corregir: poner número real de cuotas pagadas</button>`:''}
+    <button class="primary gray" id="prCorreo" style="margin-bottom:8px">Enviar estado por correo</button>
     <button class="primary gray" id="prPdfPlan" style="margin-bottom:8px">Plan de pagos en PDF</button>
     ${bor?'':'<button class="primary gray" id="prPdfEdo" style="margin-bottom:8px">Estado de cuenta en PDF</button>'}
     <button class="primary gray" id="prCopiar" style="margin-bottom:8px">Copiar estado para el deudor</button>
     <button class="primary gray" id="prEditar" style="margin-bottom:8px">Editar condiciones</button>
+    ${!bor && preCuotasPagas(p)>0 ? `<div class="card"><h3>Cuotas pagadas (${preCuotasPagas(p)})</h3>
+      ${(()=> {
+        let rows = '';
+        const nPagas = preCuotasPagas(p);
+        const cuotasPagasList = FLU.filter(f => f.actId === p.actId && f.tipo === 'cuota' && !f.borrado).sort((a,b) => a.fecha<b.fecha?-1:1);
+        for (let i=1; i<=nPagas; i++){
+          const fTheo = e.c.filas[i-1];
+          const ref = 'cuo|' + p.id + '|' + i;
+          let flReal = FLU.find(fl => fl.actId === p.actId && (fl.ref === ref || fl.nota === 'cuota '+i+' de '+e.c.filas.length));
+          if (!flReal && cuotasPagasList[i-1]) flReal = cuotasPagasList[i-1];
+          const fFecha = flReal ? flReal.fecha : (fTheo ? fTheo.fecha : '');
+          const fMonto = flReal ? flReal.monto : (fTheo ? Math.round(fTheo.pago) : 0);
+          rows += `<div class="f" style="margin-bottom:6px;font-size:12.5px">
+            <span>Cuota ${i} (${fCorta(fFecha)})</span>
+            <span class="mono">${money(fMonto)}</span>
+            <button class="chipbtn" style="padding:2px 8px;font-size:11px" onclick="prEditarCuota('${p.id}', ${i})">Editar</button>
+          </div>`;
+        }
+        return rows;
+      })()}</div>` : ''}
     <div class="card"><h3>Cuadro completo</h3>${prTabla(e.c)}</div>`;
   $('#prCopiar').onclick = () => prCopiar(p, e);
+  const cor = $$real('#prCorreo');
+  if (cor) cor.onclick = () => prEnviarCorreo(p, e);
   $('#prEditar').onclick = () => { PRA.modo='editar'; prPintar(); };
   $('#prPdfPlan').onclick = () => prImprimir(p, 'plan');
   const dh = $$real('#prDeshacerBtn');
   if (dh) dh.onclick = () => prDeshacer(p);
+  const lb = $$real('#prLimpiarBtn');
+  if (lb) lb.onclick = () => prLimpiarCuotas(p);
   const pe = $$real('#prPdfEdo');
   if (pe) pe.onclick = () => prImprimir(p, 'estado');
   const ej = $$real('#prEjecutarBtn');
@@ -2874,6 +3212,12 @@ async function prEjecutar(p, x, armar){
     }
   }
   p.bolsa = bolsa;
+  if (!RB[p.n]){
+    const rub = {n:p.n, cat:'Prestado', nat:'Comprometido', pto:0, med6:0, med12:0, cv:null,
+      n12:0, tend:null, a:[0,0,0,0], anual:0, uso:1, bolsa, aviso:'', nuevo:true};
+    S.rubros.unshift(rub); RB[p.n]=rub;
+    await DB.put('cfg',{k:'rubrosExtra', v:S.rubros.filter(r=>r.nuevo)});
+  }
   if (!p.actId){
     const a = {id:'pre-'+uuid().slice(0,8), n:p.n, tipo:'prestamo', moneda:'COP',
       estado:'abierto', tasaPactada:p.tasa, pct:null, bolsa, hurdle:true,
@@ -2903,10 +3247,6 @@ async function prRegistrarCuota(p, e){
   const inte = Math.round(sig.interes), cap = Math.round(sig.capital);
   const pago = inte + cap;
   const dt = f+'T12:00';
-  /* Tu estructura, la del Excel: el interés se ACREDITA al préstamo
-     (la deuda crece lo que ganó) y la cuota completa SALE del préstamo
-     hacia la bolsa de destino. El neto sobre el préstamo es la
-     amortización, y el destino recibe lo que de verdad entró. */
   const ref = 'cuo|'+p.id+'|'+sig.k;
   const hayBolsa = p.bolsa && BOLSA[p.bolsa];
   if (hayBolsa){
@@ -2919,22 +3259,296 @@ async function prRegistrarCuota(p, e){
       valor:pago, obs:'cuota '+sig.k+' '+p.n, ts:Date.now()};
     MOV.push(mt); await DB.put('mov', mt);
   } else {
-    /* sin bolsa de préstamo: el interés entra directo al destino */
     const mi = {id:uuid(), fecha:f, hora:'12:00', dt, ym:f.slice(0,7), ref,
       r:'Intereses a favor', bolsa:dest, moneda:'COP', valorOrig:inte,
       tasa:1, valor:inte, obs:'interés '+p.n+' · cuota '+sig.k, ts:Date.now()};
     MOV.push(mi); await DB.put('mov', mi);
   }
-  /* 3. el flujo del activo, para la TIR */
   const fl = {id:uuid(), actId:p.actId, fecha:f, tipo:'cuota', ref,
     monto:Math.round(sig.pago), nota:'cuota '+sig.k+' de '+e.c.filas.length, ts:Date.now()};
   FLU.push(fl); await DB.put('flu', fl);
-  /* la valoración del activo baja al saldo del cuadro */
   const rec = {id:uuid(), actId:p.actId, fecha:f, valor:Math.round(sig.fin), ref,
     nota:'saldo según cuadro tras cuota '+sig.k, ts:Date.now()};
   VAL.push(rec); await DB.put('val', rec);
   prPintar(); render(); autoSave();
   toast('Cuota '+sig.k+': '+money(inte)+' de interés + '+money(cap)+' de capital');
+}
+
+function prEnviarCorreo(p, e){
+  const deudor = p.deudor || 'Deudor';
+  const asunto = encodeURIComponent('Estado de Cuenta - Préstamo ' + p.n);
+  const cuerpo = encodeURIComponent(
+    `Hola ${deudor},\n\n` +
+    `Te comparto el estado actualizado de tu préstamo "${p.n}":\n\n` +
+    `· Saldo pendiente: ${money(Math.round(e.saldo))}\n` +
+    `· Cuotas pagadas: ${e.k} de ${e.c.filas.length}\n` +
+    (e.sig ? `· Próxima cuota: ${fCorta(e.sig.fecha)} por ${money(Math.round(e.sig.pago))} (${money(Math.round(e.sig.interes))} interés + ${money(Math.round(e.sig.capital))} capital)\n` : `· Estado: Pagado por completo\n`) +
+    `\n¡Muchas gracias!\n`
+  );
+  window.open(`mailto:?subject=${asunto}&body=${cuerpo}`, '_blank');
+}
+
+async function prDeshacer(p){
+  /* Buscar TODAS las cuotas VIVAS de este préstamo en FLU, ordenadas por fecha */
+  const cuotas = FLU.filter(f => f.actId === p.actId && f.tipo === 'cuota' && !f.borrado)
+                     .sort((a,b) => a.fecha<b.fecha ? -1 : a.fecha>b.fecha ? 1 : (a.ts||0)-(b.ts||0));
+  if (!cuotas.length){ toast('No hay cuotas pagadas para deshacer', true); return; }
+
+  const ult = cuotas[cuotas.length - 1];   /* la última cuota registrada */
+  const kLabel = cuotas.length;
+
+  if (!confirm(
+    `¿Eliminar la cuota más reciente del préstamo "${p.n}"?\n\n`+
+    `Cuota #${kLabel} · fecha ${ult.fecha} · monto ${money(ult.monto)}\n\n`+
+    `Se borrarán el flujo, la valoración y los movimientos asociados.`)) return;
+
+  /* 1. Soft-delete del flujo (marca borrado para que la sincronización lo respete) */
+  ult.borrado = Date.now();
+  await DB.put('flu', ult);
+
+  /* 2. Soft-delete de la valoración asociada (por ref, por nota o por fecha+actId) */
+  const valCands = VAL.filter(v => !v.borrado && v.actId === p.actId && (
+    (ult.ref && v.ref === ult.ref) ||
+    (v.nota && v.nota.includes('cuota '+kLabel)) ||
+    (v.fecha === ult.fecha)
+  ));
+  for (const v of valCands){ v.borrado = Date.now(); await DB.put('val', v); }
+
+  /* 3. Soft-delete de movimientos (por ref, obs o fecha) */
+  const movCands = MOV.filter(m => vivo(m) && (
+    (ult.ref && m.ref === ult.ref) ||
+    (m.obs && m.obs.includes('cuota '+kLabel) && m.obs.includes(p.n)) ||
+    (m.obs && m.obs.includes('cuota '+kLabel) && m.fecha === ult.fecha)
+  ));
+  for (const m of movCands){ m.borrado = Date.now(); await DB.put('mov', m); }
+
+  p.ts = Date.now();
+  await DB.put('pre', p);
+  if (PRA && PRA.p && PRA.p.id === p.id) PRA.p = p;
+  prPintar(); render(); autoSave();
+  toast(`Cuota ${kLabel} (${fCorta(ult.fecha)}) eliminada · quedan ${cuotas.length - 1}`);
+}
+
+/* Limpieza masiva: reduce las cuotas pagadas al número real que el usuario indica */
+async function prLimpiarCuotas(p){
+  const cuotas = FLU.filter(f => f.actId === p.actId && f.tipo === 'cuota' && !f.borrado)
+                     .sort((a,b) => a.fecha<b.fecha ? -1 : a.fecha>b.fecha ? 1 : (a.ts||0)-(b.ts||0));
+  const total = cuotas.length;
+  if (!total){ toast('No hay cuotas', true); return; }
+
+  const nStr = prompt(
+    `Este préstamo tiene ${total} cuotas registradas en el sistema.\n`+
+    `¿Cuántas cuotas se han pagado REALMENTE?\n\n`+
+    `Las cuotas sobrantes se eliminarán de la más reciente a la más antigua.`, '7');
+  if (nStr === null) return;
+  const nReal = Math.max(0, Math.round(+nStr));
+  if (nReal >= total){ toast('No hay nada que limpiar: '+total+' ≤ '+nReal, true); return; }
+
+  const sobran = cuotas.slice(nReal);   /* las que están de más */
+  if (!confirm(`Se eliminarán ${sobran.length} cuotas fantasma (de la ${nReal+1} a la ${total}).\n`+
+    `Quedarán ${nReal} cuotas reales.\n\n¿Continuar?`)) return;
+
+  for (const fl of sobran){
+    /* Soft-delete del flujo */
+    fl.borrado = Date.now();
+    await DB.put('flu', fl);
+
+    /* Soft-delete de valoraciones */
+    const vals = VAL.filter(v => !v.borrado && v.actId === p.actId && (
+      (fl.ref && v.ref === fl.ref) ||
+      (v.fecha === fl.fecha && v.nota && v.nota.includes('cuota'))
+    ));
+    for (const v of vals){ v.borrado = Date.now(); await DB.put('val', v); }
+
+    /* Soft-delete de movimientos */
+    const movs = MOV.filter(m => vivo(m) && (
+      (fl.ref && m.ref === fl.ref) ||
+      (m.fecha === fl.fecha && m.obs && m.obs.includes(p.n))
+    ));
+    for (const m of movs){ m.borrado = Date.now(); await DB.put('mov', m); }
+  }
+
+  p.ts = Date.now();
+  await DB.put('pre', p);
+  if (PRA && PRA.p && PRA.p.id === p.id) PRA.p = p;
+  prPintar(); render(); autoSave();
+  toast(`Limpieza: ${sobran.length} cuotas eliminadas · quedan ${nReal}`);
+}
+
+async function prEditarCuota(pId, kNum){
+  const p = typeof pId === 'string' ? PRE.find(x => x.id === pId) : pId;
+  if (!p){ toast('No se encontró el préstamo', true); return; }
+
+  const e = preCuadro(p);
+  const filas = e.filas || [];
+  const fTheo = filas[kNum - 1] || null;
+  const ref = 'cuo|'+p.id+'|'+kNum;
+  
+  let fl = FLU.find(f => !f.borrado && f.actId === p.actId && (f.ref === ref || f.nota === 'cuota '+kNum+' de '+filas.length));
+  if (!fl){
+    const cuotas = FLU.filter(f => f.actId === p.actId && f.tipo === 'cuota' && !f.borrado).sort((a,b) => a.fecha<b.fecha?-1:1);
+    fl = cuotas[kNum - 1];
+  }
+  
+  let movs = MOV.filter(m => vivo(m) && (m.ref === ref || (m.obs && m.obs.includes('cuota '+kNum))));
+  let val = VAL.find(v => !v.borrado && v.actId === p.actId && (v.ref === ref || (v.nota && v.nota.includes('cuota '+kNum))));
+
+  const fActual = fl ? fl.fecha : (fTheo ? fTheo.fecha : todayISO());
+  const fNue = prompt(`Editar Cuota ${kNum} de ${p.n}\n\nNueva fecha del pago (AAAA-MM-DD):`, fActual);
+  if (fNue===null) return;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(fNue)){ toast('Fecha inválida', true); return; }
+
+  const mActual = fl ? fl.monto : (fTheo ? Math.round(fTheo.pago) : 0);
+  const mNue = prompt(`Nuevo valor TOTAL de la cuota pagada ($):`, mActual);
+  if (mNue===null) return;
+  const mVal = +mNue || 0;
+
+  const miMov = movs.find(m => m.r === 'Intereses a favor');
+  const inteActual = miMov ? miMov.valor : (fTheo ? Math.round(fTheo.interes) : 0);
+  const inteNue = prompt(`Monto abonado a INTERESES ($):`, inteActual);
+  if (inteNue===null) return;
+  const inteVal = +inteNue || 0;
+
+  const mtMov = movs.find(m => m.tipo==='traslado');
+  const destActual = mtMov ? mtMov.a : (p.bolsa || 'Caja');
+  const destNue = prompt(`Bolsa que recibió la cuota (destino):`, destActual);
+  if (destNue===null) return;
+
+  if (fl){ fl.fecha = fNue; fl.monto = mVal; fl.ref = ref; await DB.put('flu', fl); }
+  if (val){ val.fecha = fNue; val.ref = ref; await DB.put('val', val); }
+
+  for (const m of movs){
+    m.fecha = fNue; m.dt = fNue + 'T12:00'; m.ym = fNue.slice(0,7); m.ref = ref;
+    if (m.tipo === 'traslado'){
+      m.a = destNue;
+      m.deOrig = mVal; m.aOrig = mVal; m.valor = mVal;
+    } else {
+      m.valorOrig = inteVal; m.valor = inteVal;
+    }
+    await DB.put('mov', m);
+  }
+
+  p.ts = Date.now();
+  await DB.put('pre', p);
+  if (PRA && PRA.p && PRA.p.id === p.id) PRA.p = p;
+
+  prPintar();
+  render();
+  autoSave();
+  toast('Cuota ' + kNum + ' del préstamo editada correctamente');
+}
+
+async function editarMov(mInput){
+  let m = typeof mInput === 'string' ? MOV.find(x => x.id === mInput && vivo(x)) : mInput;
+  if (!m){ toast('No se encontró el movimiento', true); return; }
+
+  if (m.ref && m.ref.startsWith('cuo|')){
+    const parts = m.ref.split('|');
+    const pId = parts[1], kNum = +parts[2];
+    const p = PRE.find(x => x.id === pId);
+    if (p){ prEditarCuota(p, kNum); return; }
+  }
+
+  armarBolsas();
+  const cur = m.moneda || 'COP';
+  const valActual = m.valorOrig != null ? m.valorOrig : m.valor;
+  const esTraslado = m.tipo === 'traslado';
+
+  /* armar la lista de bolsas para el select */
+  const bolsaOpts = BOLSAS
+    .sort((a,b)=>nomB(a.b).localeCompare(nomB(b.b),'es'))
+    .map(b => {
+      const et = (b.padre?nomB(b.padre)+' · ':'')+nomB(b.b)
+        + (esPadre(b.b)?' (madre)':'');
+      return `<option value="${b.b}"${b.b===m.bolsa?' selected':''}>${et}</option>`;
+    }).join('');
+
+  /* armar la lista de rubros para el select */
+  const rubroOpts = S.rubros
+    .filter(r=>r.nat!=='Nómina')
+    .sort((a,b)=>a.n.localeCompare(b.n,'es'))
+    .map(r=>`<option value="${r.n}"${r.n===m.r?' selected':''}>${r.n} · ${r.nat}</option>`)
+    .join('');
+
+  const ov = document.createElement('div');
+  ov.style.cssText = 'position:fixed;inset:0;z-index:90;background:rgba(0,0,0,.6);'
+    + 'display:flex;align-items:center;justify-content:center;padding:24px';
+  ov.innerHTML = `<div class="card" style="max-width:380px;width:100%;margin:0;max-height:90vh;overflow-y:auto">
+    <h3>${esTraslado ? 'Editar traslado' : 'Editar movimiento'}</h3>
+    <div class="f" style="margin-bottom:8px">
+      <label style="font-size:13px">Fecha</label>
+      <input type="date" id="emFecha" value="${m.fecha}" style="width:100%"></div>
+    <div class="f" style="margin-bottom:8px">
+      <label style="font-size:13px">Monto${cur!=='COP'?' ('+cur+')':''}</label>
+      <input type="number" step="any" id="emMonto" value="${valActual}" style="width:100%"></div>
+    ${esTraslado ? '' : `<div class="f" style="margin-bottom:8px">
+      <label style="font-size:13px">Rubro</label>
+      <select id="emRubro" style="width:100%">${rubroOpts}</select></div>
+    <div class="f" style="margin-bottom:8px">
+      <label style="font-size:13px">Bolsa</label>
+      <select id="emBolsa" style="width:100%">${bolsaOpts}</select></div>`}
+    <div class="f" style="margin-bottom:12px">
+      <label style="font-size:13px">Nota</label>
+      <input type="text" id="emObs" value="${(m.obs||'').replace(/"/g,'&quot;')}" placeholder="Opcional" style="width:100%"></div>
+    <div style="display:flex;gap:8px">
+      <button class="primary" id="emOk" style="flex:1">Guardar</button>
+      <button class="primary gray" id="emDel" style="flex:1;color:var(--bad)">Borrar</button>
+      <button class="primary gray" id="emX" style="flex:1">Cancelar</button>
+    </div></div>`;
+  document.body.appendChild(ov);
+
+  return new Promise(resolve => {
+    ov.querySelector('#emX').onclick = () => { ov.remove(); resolve(); };
+    ov.querySelector('#emDel').onclick = async () => {
+      if (!confirm('¿Seguro que deseas borrar este movimiento?')) return;
+      m.borrado = Date.now();
+      await DB.put('mov', m);
+      ov.remove(); render(); autoSave(); toast('Movimiento borrado'); resolve();
+    };
+    ov.querySelector('#emOk').onclick = async () => {
+      const fNue = ov.querySelector('#emFecha').value;
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(fNue)){ toast('Fecha inválida', true); return; }
+      const vVal = +ov.querySelector('#emMonto').value || 0;
+      if (esTraslado){
+        m.fecha=fNue; m.dt=fNue+'T12:00'; m.ym=fNue.slice(0,7);
+        m.deOrig=vVal; m.aOrig=vVal; m.valor=vVal;
+        m.obs = ov.querySelector('#emObs').value.trim();
+        m.ts = Date.now();
+      } else {
+        m.fecha=fNue; m.dt=fNue+'T12:00'; m.ym=fNue.slice(0,7);
+        m.r = ov.querySelector('#emRubro').value;
+        m.bolsa = ov.querySelector('#emBolsa').value;
+        m.valorOrig=vVal; m.valor=Math.round(vVal*trmDe(cur));
+        m.obs = ov.querySelector('#emObs').value.trim();
+        m.ts = Date.now();
+      }
+      await DB.put('mov', m);
+      ov.remove(); render(); autoSave(); toast('Movimiento actualizado'); resolve();
+    };
+  });
+}
+
+async function limpiarDuplicadosTrii(){
+  armarBolsas();
+  const triiBolsas = BOLSAS.filter(b => /trii/i.test(b.b) || /trii/i.test(b.alias||''));
+  if (!triiBolsas.length){ toast('No se encontraron bolsillos de Trii', true); return; }
+  
+  const principal = triiBolsas.find(b => !b.padre) || triiBolsas[0];
+  const secundarias = triiBolsas.filter(b => b.b !== principal.b);
+  
+  if (!secundarias.length){ toast('Trii no tiene bolsillos duplicados', true); return; }
+  
+  if (!confirm(`Se encontraron ${secundarias.length} bolsillos/cuentas asociadas a Trii:\n` +
+               secundarias.map(s => '· ' + nomB(s.b)).join('\n') +
+               `\n\n¿Deseas agruparlas como bolsillos dependientes de "${nomB(principal.b)}"?`)) return;
+               
+  const ed = {...(CFG.bolsasEdit||{})};
+  for (const s of secundarias){
+    ed[s.b] = {...(ed[s.b]||{}), padre: principal.b};
+  }
+  await setCfg('bolsasEdit', ed);
+  armarBolsas(); renderSaldos(); render(); autoSave();
+  toast(`Bolsillos de Trii agrupados bajo ${nomB(principal.b)}`);
 }
 
 function prCopiar(p, e){
@@ -3091,7 +3705,7 @@ function prDoc(p, tipo){
   const marca = 'Credi-' + ((CFG.nombre || (S&&S.nombre) || '').trim() || 'Diario');
   const e = preEstado(p);
   const hoy = new Date().toISOString().slice(0,10);
-  const cuo = p.actId ? FLU.filter(f=>f.actId===p.actId && f.tipo==='cuota')
+  const cuo = p.actId ? FLU.filter(f=>f.actId===p.actId && f.tipo==='cuota' && !f.borrado)
     .sort((a,b)=>a.fecha<b.fecha?-1:1) : [];
   const fmt = n => '$'+new Intl.NumberFormat('es-CO',{maximumFractionDigits:0}).format(Math.round(n));
   const esEdo = tipo==='estado';
@@ -3101,10 +3715,20 @@ function prDoc(p, tipo){
     const est = esEdo ? (pago
       ? `<td class="ok">pagada · ${pago.fecha}</td>`
       : `<td class="pend">pendiente</td>`) : '';
+    /* Si es estado de cuenta y la cuota fue pagada, mostrar montos REALES */
+    let montoReal = f.pago, intReal = f.interes, capReal = f.capital, saldoReal = f.fin;
+    if (esEdo && pago){
+      montoReal = pago.monto || f.pago;
+      /* buscar el movimiento de intereses para obtener el interés real */
+      const refCuo = pago.ref || ('cuo|'+p.id+'|'+(i+1));
+      const movInt = MOV.find(m => vivo(m) && m.ref === refCuo && m.r === 'Intereses a favor');
+      intReal = movInt ? movInt.valor : f.interes;
+      capReal = montoReal - intReal;
+    }
     return `<tr${esEdo&&pago?' class="paga"':''}>
-      <td>${f.k}</td><td>${f.fecha}</td>
-      <td class="n">${fmt(f.pago)}</td><td class="n">${fmt(f.interes)}</td>
-      <td class="n">${fmt(f.capital)}</td><td class="n">${fmt(f.fin)}</td>${est}</tr>`;
+      <td>${f.k}</td><td>${esEdo && pago ? pago.fecha : f.fecha}</td>
+      <td class="n">${fmt(esEdo && pago ? montoReal : f.pago)}</td><td class="n">${fmt(esEdo && pago ? intReal : f.interes)}</td>
+      <td class="n">${fmt(esEdo && pago ? capReal : f.capital)}</td><td class="n">${fmt(f.fin)}</td>${est}</tr>`;
   }).join('');
 
   return `<!DOCTYPE html><html lang="es"><head><meta charset="utf-8">
@@ -3159,13 +3783,14 @@ function prDoc(p, tipo){
 ${esEdo?`<div class="res">
   <div><span>Cuotas pagadas</span><b>${e.k} de ${e.c.filas.length}</b></div>
   <div><span>Saldo de capital</span><b>${fmt(e.saldo)}</b></div>
+  <div><span>Total recibido</span><b>${fmt(cuo.reduce((s,f)=>s+(f.monto||0),0))}</b></div>
   <div><span>${e.sig?'Próxima cuota':'Estado'}</span><b>${e.sig
     ? e.sig.fecha+' · '+fmt(e.sig.pago) : 'PAGADO'}</b></div>
 </div>`:''}
 
 <h2>${esEdo?'Detalle de pagos':'Cuadro de amortización'}</h2>
 <table>
-  <tr><th>#</th><th>Vence</th><th class="n">Cuota</th><th class="n">Interés</th>
+  <tr><th>#</th><th>${esEdo?'Fecha pago':'Vence'}</th><th class="n">Cuota</th><th class="n">Interés</th>
     <th class="n">Capital</th><th class="n">Saldo</th>${esEdo?'<th>Estado</th>':''}</tr>
   ${filas}
 </table>
@@ -3189,32 +3814,10 @@ function prImprimir(p, tipo){
    medio dejaría el cuadro con huecos. Se buscan las piezas por la
    referencia; para cuotas viejas —de antes de las referencias— se cae a
    buscar por la observación. */
-async function prDeshacer(p){
-  const cuo = FLU.filter(f=>f.actId===p.actId && f.tipo==='cuota');
-  if (!cuo.length){ toast('No hay cuotas registradas', true); return; }
-  const k = cuo.length;
-  if (!confirm('¿Deshacer la cuota '+k+' de «'+p.n+'»? Se quitan el flujo, los '
-    +'movimientos y la valoración que generó.')) return;
-  const ult = cuo[cuo.length-1];
-  const ref = ult.ref;
-  /* el flujo */
-  FLU = FLU.filter(x=>x.id!==ult.id); await DB.del('flu', ult.id);
-  /* los movimientos: con referencia, o por observación si son viejos */
-  const esDeCuota = m => (ref && m.ref===ref)
-    || m.obs==='cuota '+k+' '+p.n
-    || m.obs==='interés '+p.n+' · cuota '+k
-    || m.obs==='amortización '+p.n+' · cuota '+k;
-  let bajas = 0;
-  for (const m of MOV) if (!m.borrado && esDeCuota(m)){
-    m.borrado = Date.now(); await DB.put('mov', m); bajas++;
-  }
-  /* la valoración */
-  const val = VAL.filter(v=>v.actId===p.actId &&
-    ((ref && v.ref===ref) || (v.nota||'').includes('tras cuota '+k)));
-  for (const v of val){ VAL = VAL.filter(x=>x.id!==v.id); await DB.del('val', v.id); }
-  prPintar(); render(); autoSave();
-  toast('Cuota '+k+' deshecha · '+bajas+' movimientos dados de baja');
-}
+/* NOTA: esta segunda prDeshacer queda como stub; la versión definitiva
+   con soft-delete está arriba (línea ~2993). Si se llega aquí por error,
+   delega a la de arriba. */
+/* async function prDeshacer(p) — see above */
 
 /* =================== render: pensión =================== */
 function renderPen(){
@@ -3663,7 +4266,10 @@ function renderCfg(){
     const ov = PTO[r.n+'|'+ym];
     return `<div class="f" style="margin-bottom:7px">
       <label style="font-size:13px">${r.n}
-        <span style="color:var(--tx3);font-size:11px"> · ${r.nat}</span></label>
+        <select data-nat="${r.n}" style="font-size:10px;padding:2px 4px;margin-left:4px;
+          background:var(--bg3);border:1px solid var(--line);border-radius:6px;color:var(--tx3)">
+          ${NAT_PTO.map(n=>`<option${n===r.nat?' selected':''}>${n}</option>`).join('')}
+        </select></label>
       <input type="number" step="any" data-pto="${r.n}"
         placeholder="${nf.format(r.pto)}" value="${ov!=null?ov:''}"></div>`;
   }).join('');
@@ -3697,16 +4303,458 @@ function renderCfg(){
     ${ACT.length} activos · ${FLU.length} flujos · ${VAL.length} valoraciones.<br>
     Base histórica del Excel hasta ${ymLabel(CFG.baseHasta)} (${Object.keys(S.ejecucion).length} rubros con datos).<br>
     Semilla generada el ${S.generado}.`;
+  renderCfgNomina();
+  renderCfgFacturas();
 }
 
 async function setCfg(k,v){ CFG[k]=v; await DB.put('cfg',{k,v}); }
 
+/* =================== NÓMINA / DESPRENDIBLE DE PAGO =================== */
+function renderCfgNomina(){
+  const body = $$real('#cfNominaBody');
+  if (!body) return;
+  const nom = getCfgNomina();
+
+  let html = `
+    <div class="f" style="margin-bottom:10px">
+      <label>Empresa / Empleador</label>
+      <input type="text" id="cnEmpresa" value="${nom.empresa||''}" placeholder="HITSS COLOMBIA SAS">
+    </div>
+    <div class="f" style="margin-bottom:10px">
+      <label>Salario Básico ($)</label>
+      <input type="number" id="cnBasico" value="${nom.basico||0}" step="any">
+    </div>
+    <div class="f" style="margin-bottom:10px">
+      <label>Bolsa Destino del Neto</label>
+      <select id="cnBolsaNeto">
+        ${(S.bolsas||[]).map(b => `<option value="${b}" ${nom.bolsaNeto===b?'selected':''}>${nomB(b)}</option>`).join('')}
+      </select>
+    </div>
+
+    <div style="font-weight:600;font-size:12.5px;color:var(--tx);margin:14px 0 6px">Devengos por defecto (${nom.devengos.length})</div>
+    <div id="cnDevList">
+      ${nom.devengos.map((d, i) => `
+        <div class="f cn-row" style="margin-bottom:6px;gap:6px">
+          <input type="text" class="cn-cod" value="${d.cod||''}" placeholder="Código" style="width:65px">
+          <input type="text" class="cn-nom" value="${d.n||''}" placeholder="Concepto" style="flex:1">
+          <input type="number" class="cn-val" value="${d.v||0}" placeholder="Monto" style="width:110px">
+          <button class="chipbtn cn-del" data-type="dev" data-i="${i}">✕</button>
+        </div>
+      `).join('')}
+    </div>
+    <button class="chipbtn" id="cnAddDev" style="margin-bottom:12px">＋ Agregar Devengo</button>
+
+    <div style="font-weight:600;font-size:12.5px;color:var(--tx);margin:14px 0 6px">Deducciones por defecto (${nom.deducciones.length})</div>
+    <div id="cnDedList">
+      ${nom.deducciones.map((d, i) => `
+        <div class="f cn-row" style="margin-bottom:6px;gap:6px">
+          <input type="text" class="cn-cod" value="${d.cod||''}" placeholder="Código" style="width:65px">
+          <input type="text" class="cn-nom" value="${d.n||''}" placeholder="Concepto" style="flex:1">
+          <input type="number" class="cn-val" value="${d.v||0}" placeholder="Monto" style="width:110px">
+          <button class="chipbtn cn-del" data-type="ded" data-i="${i}">✕</button>
+        </div>
+      `).join('')}
+    </div>
+    <button class="chipbtn" id="cnAddDed" style="margin-bottom:12px">＋ Agregar Deducción</button>
+  `;
+
+  body.innerHTML = html;
+
+  const btnDev = $$real('#cnAddDev');
+  if (btnDev) btnDev.onclick = () => {
+    nom.devengos.push({ cod: '', n: 'Nuevo Devengo', v: 0, cat: 'Nómina', nat: 'Ingreso' });
+    renderCfgNomina();
+  };
+  const btnDed = $$real('#cnAddDed');
+  if (btnDed) btnDed.onclick = () => {
+    nom.deducciones.push({ cod: '', n: 'Nueva Deducción', v: 0, cat: 'Servicios', nat: 'Comprometido' });
+    renderCfgNomina();
+  };
+
+  body.onclick = e => {
+    const btn = e.target.closest('.cn-del');
+    if (btn){
+      const type = btn.dataset.type;
+      const idx = +btn.dataset.i;
+      if (type === 'dev') nom.devengos.splice(idx, 1);
+      else if (type === 'ded') nom.deducciones.splice(idx, 1);
+      renderCfgNomina();
+    }
+  };
+}
+
+async function cfgNominaGuardar(){
+  const empresa = ($$real('#cnEmpresa') && $$real('#cnEmpresa').value) || 'HITSS COLOMBIA SAS';
+  const basico = +($$real('#cnBasico') && $$real('#cnBasico').value) || 0;
+  const bolsaNeto = ($$real('#cnBolsaNeto') && $$real('#cnBolsaNeto').value) || (S.bolsas[0]||'Caja');
+
+  const devRows = $$('#cnDevList .cn-row');
+  const devengos = [];
+  devRows.forEach(row => {
+    const cod = row.querySelector('.cn-cod').value;
+    const n = row.querySelector('.cn-nom').value;
+    const v = +row.querySelector('.cn-val').value || 0;
+    if (n) devengos.push({ cod, n, v, cat: 'Nómina', nat: 'Ingreso' });
+  });
+
+  const dedRows = $$('#cnDedList .cn-row');
+  const deducciones = [];
+  dedRows.forEach(row => {
+    const cod = row.querySelector('.cn-cod').value;
+    const n = row.querySelector('.cn-nom').value;
+    const v = +row.querySelector('.cn-val').value || 0;
+    if (n) deducciones.push({ cod, n, v, cat: 'Servicios', nat: 'Comprometido' });
+  });
+
+  const nominaObj = { empresa, basico, bolsaNeto, devengos, deducciones };
+  CFG.nomina = nominaObj;
+  await setCfg('nomina', nominaObj);
+  toast('Plantilla de nómina guardada');
+}
+
+let WN = null;
+
+function wizNominaAbrir(){
+  const cfgNom = getCfgNomina();
+  WN = {
+    paso: 1,
+    ym: ym || ymOf(new Date()),
+    empresa: cfgNom.empresa || 'HITSS COLOMBIA SAS',
+    basico: cfgNom.basico || 17443000,
+    bolsaNeto: cfgNom.bolsaNeto || (S.bolsas[0] || 'Caja'),
+    devengos: JSON.parse(JSON.stringify(cfgNom.devengos || [])),
+    deducciones: JSON.parse(JSON.stringify(cfgNom.deducciones || []))
+  };
+  wizNominaPintar();
+  $('#wizNomina').style.display = 'flex';
+}
+
+function wizNominaCerrar(){
+  $('#wizNomina').style.display = 'none';
+  render();
+}
+
+function wizNominaPintar(){
+  if (!WN) return;
+  const paso = WN.paso;
+  $('#wnProg').style.width = (paso / 4 * 100) + '%';
+  $('#wnPaso').textContent = `Paso ${paso} de 4`;
+
+  const totalDev = WN.devengos.reduce((s, x) => s + (x.v || 0), 0);
+  const totalDed = WN.deducciones.reduce((s, x) => s + (x.v || 0), 0);
+  const neto = totalDev - totalDed;
+
+  let cuerpoHtml = '';
+  if (paso === 1){
+    cuerpoHtml = `
+      <div style="font-weight:600;font-size:16px;color:var(--tx);margin-bottom:6px">1. Datos Generales de la Nómina</div>
+      <p class="note" style="margin-bottom:14px">Periodo y salario básico a liquidar.</p>
+      
+      <div class="f" style="margin-bottom:12px">
+        <label>Periodo (Mes)</label>
+        <input type="month" id="wnYM" value="${WN.ym}" style="max-width:160px">
+      </div>
+      <div class="f" style="margin-bottom:12px">
+        <label>Empresa / Empleador</label>
+        <input type="text" id="wnEmpresa" value="${WN.empresa}" style="flex:1">
+      </div>
+      <div class="f" style="margin-bottom:12px">
+        <label>Salario Básico ($)</label>
+        <input type="number" id="wnBasico" value="${WN.basico}" step="any" style="flex:1">
+      </div>
+      <div class="f" style="margin-bottom:12px">
+        <label>Bolsa de Destino del Neto</label>
+        <select id="wnBolsaNeto" style="flex:1">
+          ${(S.bolsas||[]).map(b => `<option value="${b}" ${WN.bolsaNeto===b?'selected':''}>${nomB(b)}</option>`).join('')}
+        </select>
+      </div>`;
+  } else if (paso === 2){
+    cuerpoHtml = `
+      <div style="font-weight:600;font-size:16px;color:var(--tx);margin-bottom:6px">2. Devengos (Ingresos de Nómina)</div>
+      <p class="note" style="margin-bottom:12px">Ajustá los conceptos devengados en el mes.</p>
+      <div id="wnDevRows">
+        ${WN.devengos.map((d, i) => `
+          <div class="f wn-row" style="margin-bottom:8px;gap:6px">
+            <input type="text" class="wn-cod" value="${d.cod||''}" placeholder="Cód" style="width:65px">
+            <input type="text" class="wn-nom" value="${d.n||''}" placeholder="Concepto" style="flex:1">
+            <input type="number" class="wn-val" value="${d.v||0}" placeholder="Valor" style="width:120px">
+            <button class="chipbtn wn-del" data-type="dev" data-i="${i}">✕</button>
+          </div>
+        `).join('')}
+      </div>
+      <button class="chipbtn" id="wnAddDev" style="margin-bottom:14px">＋ Agregar Devengo</button>
+      <div style="background:var(--bg2);border:1px solid var(--line);border-radius:10px;padding:10px;display:flex;justify-content:space-between;align-items:center">
+        <span>Total Devengos</span>
+        <b class="mono" style="color:var(--ok);font-size:15px">${money(totalDev)}</b>
+      </div>`;
+  } else if (paso === 3){
+    cuerpoHtml = `
+      <div style="font-weight:600;font-size:16px;color:var(--tx);margin-bottom:6px">3. Deducciones (Descuentos)</div>
+      <p class="note" style="margin-bottom:12px">Ajustá las deducciones de ley y otros descuentos.</p>
+      <div id="wnDedRows">
+        ${WN.deducciones.map((d, i) => `
+          <div class="f wn-row" style="margin-bottom:8px;gap:6px">
+            <input type="text" class="wn-cod" value="${d.cod||''}" placeholder="Cód" style="width:65px">
+            <input type="text" class="wn-nom" value="${d.n||''}" placeholder="Concepto" style="flex:1">
+            <input type="number" class="wn-val" value="${d.v||0}" placeholder="Valor" style="width:120px">
+            <button class="chipbtn wn-del" data-type="ded" data-i="${i}">✕</button>
+          </div>
+        `).join('')}
+      </div>
+      <button class="chipbtn" id="wnAddDed" style="margin-bottom:14px">＋ Agregar Deducción</button>
+      <div style="background:var(--bg2);border:1px solid var(--line);border-radius:10px;padding:10px;display:flex;justify-content:space-between;align-items:center">
+        <span>Total Deducciones</span>
+        <b class="mono" style="color:var(--bad);font-size:15px">${money(totalDed)}</b>
+      </div>`;
+  } else if (paso === 4){
+    const faltantes = [...WN.devengos, ...WN.deducciones].filter(x => x.n && !RB[x.n]);
+    cuerpoHtml = `
+      <div style="font-weight:600;font-size:16px;color:var(--tx);margin-bottom:6px">4. Resumen y Confirmación</div>
+      <p class="note" style="margin-bottom:14px">Revisá la distribución antes de registrar los movimientos en el Diario.</p>
+
+      <div style="background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:14px">
+        <div class="f" style="margin-bottom:6px"><span style="color:var(--tx2)">Periodo</span><b>${ymLabel(WN.ym)}</b></div>
+        <div class="f" style="margin-bottom:6px"><span style="color:var(--tx2)">Empresa</span><b>${WN.empresa}</b></div>
+        <div class="f" style="margin-bottom:6px"><span style="color:var(--tx2)">Total Devengos</span><b class="mono" style="color:var(--ok)">+${money(totalDev)}</b></div>
+        <div class="f" style="margin-bottom:6px"><span style="color:var(--tx2)">Total Deducciones</span><b class="mono" style="color:var(--bad)">-${money(totalDed)}</b></div>
+        <div class="hr"></div>
+        <div class="f" style="margin-top:6px"><span style="font-weight:600">Neto a Depositar</span><b class="mono" style="color:var(--acc);font-size:16px">${money(neto)}</b></div>
+        <div class="f" style="margin-top:4px"><span style="color:var(--tx3);font-size:12px">Bolsa destino</span><span style="font-weight:550">${nomB(WN.bolsaNeto)}</span></div>
+      </div>
+
+      ${faltantes.length ? `
+        <div class="warnbox" style="margin-bottom:14px">
+          <b>Rubros a crear automáticamente (${faltantes.length}):</b><br>
+          ${faltantes.map(f => `· ${f.n} (${f.cat || 'General'})`).join('<br>')}
+        </div>
+      ` : '<div class="note" style="margin-bottom:14px">✓ Todos los rubros del desprendible ya existen en la base de datos.</div>'}
+    `;
+  }
+
+  $('#wnCuerpo').innerHTML = cuerpoHtml;
+
+  /* Manejo de eventos en cada paso */
+  if (paso === 1){
+    const ymInp = $$real('#wnYM'); if (ymInp) ymInp.onchange = () => { WN.ym = ymInp.value; };
+    const empInp = $$real('#wnEmpresa'); if (empInp) empInp.oninput = () => { WN.empresa = empInp.value; };
+    const basInp = $$real('#wnBasico'); if (basInp) basInp.oninput = () => { WN.basico = +basInp.value||0; };
+    const bolSel = $$real('#wnBolsaNeto'); if (bolSel) bolSel.onchange = () => { WN.bolsaNeto = bolSel.value; };
+  } else if (paso === 2){
+    const btnAddDev = $$real('#wnAddDev');
+    if (btnAddDev) btnAddDev.onclick = () => {
+      WN.devengos.push({ cod: '', n: 'Nuevo Devengo', v: 0, cat: 'Nómina', nat: 'Ingreso' });
+      wizNominaPintar();
+    };
+    const rowsDev = $$real('#wnDevRows');
+    if (rowsDev){
+      rowsDev.oninput = e => {
+        const row = e.target.closest('.wn-row');
+        if (row){
+          const i = Array.from(row.parentNode.children).indexOf(row);
+          WN.devengos[i].cod = row.querySelector('.wn-cod').value;
+          WN.devengos[i].n = row.querySelector('.wn-nom').value;
+          WN.devengos[i].v = +row.querySelector('.wn-val').value || 0;
+        }
+      };
+      rowsDev.onclick = e => {
+        const btn = e.target.closest('.wn-del');
+        if (btn){
+          const idx = +btn.dataset.i;
+          WN.devengos.splice(idx, 1);
+          wizNominaPintar();
+        }
+      };
+    }
+  } else if (paso === 3){
+    const btnAddDed = $$real('#wnAddDed');
+    if (btnAddDed) btnAddDed.onclick = () => {
+      WN.deducciones.push({ cod: '', n: 'Nueva Deducción', v: 0, cat: 'Servicios', nat: 'Comprometido' });
+      wizNominaPintar();
+    };
+    const rowsDed = $$real('#wnDedRows');
+    if (rowsDed){
+      rowsDed.oninput = e => {
+        const row = e.target.closest('.wn-row');
+        if (row){
+          const i = Array.from(row.parentNode.children).indexOf(row);
+          WN.deducciones[i].cod = row.querySelector('.wn-cod').value;
+          WN.deducciones[i].n = row.querySelector('.wn-nom').value;
+          WN.deducciones[i].v = +row.querySelector('.wn-val').value || 0;
+        }
+      };
+      rowsDed.onclick = e => {
+        const btn = e.target.closest('.wn-del');
+        if (btn){
+          const idx = +btn.dataset.i;
+          WN.deducciones.splice(idx, 1);
+          wizNominaPintar();
+        }
+      };
+    }
+  }
+
+  /* Pie de botones */
+  let pieHtml = '<div class="row">';
+  if (paso > 1){
+    pieHtml += `<button class="primary gray" id="wnAtras">← Atrás</button>`;
+  }
+  if (paso < 4){
+    pieHtml += `<button class="primary" id="wnSiguiente">Siguiente →</button>`;
+  } else {
+    pieHtml += `<button class="primary" id="wnEjecutar">⚡ Registrar Nómina</button>`;
+  }
+  pieHtml += '</div>';
+  $('#wnPie').innerHTML = pieHtml;
+
+  if ($$real('#wnAtras')) $$real('#wnAtras').onclick = () => { WN.paso--; wizNominaPintar(); };
+  if ($$real('#wnSiguiente')) $$real('#wnSiguiente').onclick = () => { WN.paso++; wizNominaPintar(); };
+  if ($$real('#wnEjecutar')) $$real('#wnEjecutar').onclick = () => wizNominaEjecutar();
+}
+
+async function wizNominaEjecutar(){
+  if (!WN) return;
+  const dt = dtLocal(new Date());
+
+  /* 1. Crear rubros faltantes */
+  for (const d of WN.devengos){
+    if (d.n) await asegurarRubro(d.n, d.cat||'Nómina', d.nat||'Ingreso', d.v);
+  }
+  for (const d of WN.deducciones){
+    if (d.n) await asegurarRubro(d.n, d.cat||'Servicios', d.nat||'Comprometido', d.v);
+  }
+
+  /* 2. Movimientos de Devengos (Ingreso) */
+  for (const d of WN.devengos){
+    if (!d.n || !d.v) continue;
+    const m = {
+      id: genId(),
+      dt: WN.ym + '-01 08:00',
+      rubro: d.n,
+      valor: d.v,
+      bolsa: WN.bolsaNeto,
+      obs: `Devengo nómina ${WN.empresa}${d.cod ? ' [' + d.cod + ']' : ''}`,
+      moneda: 'COP',
+      tasa: 1,
+      valorOrig: d.v
+    };
+    MOV.push(m);
+    await DB.put('mov', m);
+  }
+
+  /* 3. Movimientos de Deducciones (Egreso) */
+  for (const d of WN.deducciones){
+    if (!d.n || !d.v) continue;
+    const m = {
+      id: genId(),
+      dt: WN.ym + '-01 08:05',
+      rubro: d.n,
+      valor: d.v,
+      bolsa: WN.bolsaNeto,
+      obs: `Deducción nómina ${WN.empresa}${d.cod ? ' [' + d.cod + ']' : ''}`,
+      moneda: 'COP',
+      tasa: 1,
+      valorOrig: d.v
+    };
+    MOV.push(m);
+    await DB.put('mov', m);
+  }
+
+  const totalDev = WN.devengos.reduce((s, x) => s + (x.v || 0), 0);
+  const totalDed = WN.deducciones.reduce((s, x) => s + (x.v || 0), 0);
+  const neto = totalDev - totalDed;
+
+  /* 4. Actualización del módulo de Pensión si existe IBC */
+  if (WN.basico > 0 && typeof penNuevoCorte === 'function'){
+    try {
+      const c = penNuevoCorte(dt.slice(0,10), WN.basico, Math.round(WN.basico * 0.16));
+      await DB.put('cfg', { k: 'penCortes', v: c });
+    } catch(err){}
+  }
+
+  wizNominaCerrar();
+  autoSave();
+  toast(`Nómina de ${ymLabel(WN.ym)} registrada. Neto: ${money(neto)} depositado en ${nomB(WN.bolsaNeto)}`);
+}
+
+/* =================== FACTURAS DE SERVICIOS Y TELEFONÍA (JSON) =================== */
+function getFacturaMes(rubroNombre, mesYM){
+  if (!CFG.facturasServicios || !Array.isArray(CFG.facturasServicios.facturas)) return null;
+  const list = CFG.facturasServicios.facturas;
+  const match = list.find(f => 
+    (f.rubro === rubroNombre || (sinTilde(f.rubro||'').toLowerCase() === sinTilde(rubroNombre||'').toLowerCase())) &&
+    (f.periodo === mesYM || (f.vencimiento && f.vencimiento.slice(0,7) === mesYM))
+  );
+  return match || null;
+}
+
+async function importarFacturasJSON(jsonStr){
+  try {
+    const data = JSON.parse(jsonStr);
+    let list = [];
+    if (Array.isArray(data)) list = data;
+    else if (data && Array.isArray(data.facturas)) list = data.facturas;
+    else if (data && Array.isArray(data.servicios)) list = data.servicios;
+    
+    if (!list.length){
+      toast('El archivo no contiene un arreglo de facturas válido', true);
+      return;
+    }
+
+    const obj = {
+      updatedAt: new Date().toISOString(),
+      facturas: list
+    };
+
+    CFG.facturasServicios = obj;
+    await setCfg('facturasServicios', obj);
+    renderCfgFacturas();
+    render();
+    toast(`Cargadas ${list.length} facturas de servicios en el sistema`);
+  } catch(e){
+    toast('Error al leer JSON: ' + e.message, true);
+  }
+}
+
+function renderCfgFacturas(){
+  const body = $$real('#cfFacturasBody');
+  if (!body) return;
+  const fs = CFG.facturasServicios || { facturas: [] };
+  const list = fs.facturas || [];
+
+  if (!list.length){
+    body.innerHTML = '<p class="note">No hay facturas cargadas en el sistema. Presioná <b>Subir JSON</b> para cargar el archivo depositado por el agente.</p>';
+    return;
+  }
+
+  let html = `<div style="font-size:12px;color:var(--tx2);margin-bottom:8px">Última actualización: ${fs.updatedAt ? fCorta(fs.updatedAt) : '—'} (${list.length} facturas)</div>`;
+  html += '<div style="display:flex;flex-direction:column;gap:6px;max-height:220px;overflow:auto">';
+  html += list.map(f => `
+    <div style="background:var(--bg2);border:1px solid var(--line);border-radius:8px;padding:6px 10px;display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <div style="font-weight:600;font-size:13px;color:var(--tx)">${f.rubro || f.empresa}</div>
+        <div style="font-size:11px;color:var(--tx3)">Vence: ${f.vencimiento || '—'} · ${f.empresa||'Servicio'}</div>
+      </div>
+      <b class="mono" style="color:var(--bad);font-size:13px">${money(f.monto||f.valor||0)}</b>
+    </div>
+  `).join('');
+  html += '</div>';
+
+  body.innerHTML = html;
+}
+
 /* =================== sincronización =================== */
 function snapshot(){
   return { v:1, app:'diario-presupuesto', exportedAt:new Date().toISOString(),
-    mov:MOV, pto:Object.entries(PTO).map(([k,v])=>({k,v,ts:0})), obj:OBJ,
+    mov:MOV, pto:Object.entries(PTO).map(([k,v])=>({k,v,ts:PTO_TS[k]||0})), obj:OBJ,
     act:ACT, flu:FLU, val:VAL, pen:PEN, pre:PRE,
-    ver:Object.entries(VER).map(([b,x])=>({b,...x})) };
+    ver:Object.entries(VER).map(([b,x])=>({b,...x})),
+    cfg:{
+      bolsasEdit: CFG.bolsasEdit || {},
+      bolsasExtra: CFG.bolsasExtra || [],
+      rubrosExtra: CFG.rubrosExtra || [],
+      rubrosNatEdit: CFG.rubrosNatEdit || {}
+    }
+  };
 }
 async function exportar(){
   const blob = new Blob([JSON.stringify(snapshot())],{type:'application/json'});
@@ -3762,19 +4810,44 @@ async function fusionar(data, silencio){
     if (!mio){ MOV.push(m); await DB.put('mov',m); add++; if (m.borrado) bajas++; continue; }
     /* una baja gana siempre: si cualquiera de los dos lados lo borró, queda borrado */
     if (m.borrado && !mio.borrado){ mio.borrado = m.borrado; await DB.put('mov', mio); bajas++; }
+    else if ((m.ts||0) > (mio.ts||0)){ Object.assign(mio, m); await DB.put('mov', mio); }
   }
-  for (const p of (data.pto||[])) if (p.v!=null){ PTO[p.k]=p.v; await DB.put('pto',{k:p.k,v:p.v,ts:p.ts||0}); }
+  for (const p of (data.pto||[])){
+    if (p.v==null) continue;
+    const tsLocal = PTO_TS[p.k] || 0;
+    if ((p.ts||0) >= tsLocal){
+      PTO[p.k]=p.v; PTO_TS[p.k]=p.ts||0;
+      await DB.put('pto',{k:p.k,v:p.v,ts:p.ts||0});
+    }
+  }
   const oid = new Set(OBJ.map(o=>o.id));
   for (const o of (data.obj||[])){
     if (!oid.has(o.id)){ OBJ.push(o); await DB.put('obj',o); }
     else { const cur=OBJ.find(x=>x.id===o.id);
       if ((o.ts||0) > (cur.ts||0)){ Object.assign(cur,o); await DB.put('obj',cur); } }
   }
-  for (const v of (data.ver||[])) if (!VER[v.b]){ VER[v.b]={v:v.v,fecha:v.fecha}; await DB.put('ver',v); }
+  for (const v of (data.ver||[])) {
+    let key = v.b;
+    if (v.propio && esPadre(v.b) && !v.b.endsWith(':propio')) key = v.b + ':propio';
+    const cur = VER[key];
+    if (!cur || (v.fecha && (!cur.fecha || v.fecha >= cur.fecha))){
+      VER[key] = { v: v.v, fecha: v.fecha, propio: !!v.propio };
+      await DB.put('ver', { b: key, ...VER[key] });
+    }
+  }
   for (const [store, arr, cur] of [['act',data.act,ACT],['flu',data.flu,FLU],
                                    ['val',data.val,VAL],['pen',data.pen,PEN]]){
-    const ids = new Set(cur.map(x=>x.id));
-    for (const x of (arr||[])) if (!ids.has(x.id)){ cur.push(x); await DB.put(store,x); }
+    const ids = new Map(cur.map(x=>[x.id,x]));
+    for (const x of (arr||[])){
+      const mio = ids.get(x.id);
+      if (!mio){ cur.push(x); await DB.put(store,x); }
+      else {
+        if (x.borrado && !mio.borrado){ mio.borrado = x.borrado; await DB.put(store,mio); }
+        else if ((x.ts||0) > (mio.ts||0) || (store==='act' && (x.valFecha||'') >= (mio.valFecha||''))){
+          Object.assign(mio, x); await DB.put(store, mio);
+        }
+      }
+    }
   }
   /* préstamos: como los objetivos, gana el que se editó más recientemente */
   for (const p of (data.pre||[])){
@@ -3782,10 +4855,260 @@ async function fusionar(data, silencio){
     if (!cur){ PRE.push(p); await DB.put('pre',p); }
     else if ((p.ts||0) > (cur.ts||0)){ Object.assign(cur,p); await DB.put('pre',cur); }
   }
+  if (data.cfg){
+    let cambioCfg = false;
+    if (data.cfg.bolsasEdit){
+      const ed = {...(CFG.bolsasEdit||{}), ...data.cfg.bolsasEdit};
+      await setCfg('bolsasEdit', ed); cambioCfg = true;
+    }
+    if (data.cfg.bolsasExtra){
+      const ids = new Set((CFG.bolsasExtra||[]).map(b=>b.b));
+      let ed = [...(CFG.bolsasExtra||[])];
+      for (const b of data.cfg.bolsasExtra){
+        if (!ids.has(b.b)){ ed.push(b); cambioCfg = true; }
+      }
+      if (cambioCfg) await setCfg('bolsasExtra', ed);
+    }
+    if (data.cfg.rubrosExtra){
+      const ids = new Set((CFG.rubrosExtra||[]).map(r=>r.n));
+      let ed = [...(CFG.rubrosExtra||[])];
+      for (const r of data.cfg.rubrosExtra){
+        if (!ids.has(r.n)){ ed.push(r); cambioCfg = true; }
+      }
+      if (cambioCfg) await setCfg('rubrosExtra', ed);
+    }
+    if (data.cfg.rubrosNatEdit){
+      const ed = {...(CFG.rubrosNatEdit||{}), ...data.cfg.rubrosNatEdit};
+      await setCfg('rubrosNatEdit', ed); cambioCfg = true;
+    }
+    if (cambioCfg) armarBolsas();
+  }
   render();
   if (!silencio) toast('Fusionado: '+add+' nuevos'+(bajas?', '+bajas+' de baja':''));
   else if (add||bajas) toast('Del otro dispositivo: '+add+' nuevos'
     +(bajas?', '+bajas+' borrados':''));
+}
+
+async function reemplazarTodo(d){
+  if (!d || d.app!=='diario-presupuesto') throw new Error('Eso no es un respaldo válido');
+  for (const s of ['mov','pto','obj','act','flu','val','pen','pre','ver']) {
+    await DB.clear(s);
+  }
+  MOV = (d.mov||[]).map(m=>({...m}));
+  for (const m of MOV) await DB.put('mov', m);
+
+  Object.keys(PTO).forEach(k=>delete PTO[k]);
+  Object.keys(PTO_TS).forEach(k=>delete PTO_TS[k]);
+  for (const p of (d.pto||[])){
+    if (p.v!=null){ PTO[p.k]=p.v; PTO_TS[p.k]=p.ts||0; await DB.put('pto',{k:p.k,v:p.v,ts:p.ts||0}); }
+  }
+
+  OBJ = (d.obj||[]).map(o=>({...o}));
+  for (const o of OBJ) await DB.put('obj', o);
+
+  ACT = (d.act||[]).map(a=>({...a}));
+  for (const a of ACT) await DB.put('act', a);
+
+  FLU = (d.flu||[]).map(f=>({...f}));
+  for (const f of FLU) await DB.put('flu', f);
+
+  VAL = (d.val||[]).map(v=>({...v}));
+  for (const v of VAL) await DB.put('val', v);
+
+  PEN = (d.pen||[]).map(p=>({...p}));
+  for (const p of PEN) await DB.put('pen', p);
+
+  PRE = (d.pre||[]).map(p=>({...p}));
+  for (const p of PRE) await DB.put('pre', p);
+
+  Object.keys(VER).forEach(k=>delete VER[k]);
+  for (const v of (d.ver||[])){
+    let key = v.b;
+    if (v.propio && esPadre(v.b) && !v.b.endsWith(':propio')) key = v.b + ':propio';
+    VER[key] = {v:v.v, fecha:v.fecha, propio:!!v.propio};
+    await DB.put('ver', {b:key, ...VER[key]});
+  }
+
+  if (d.cfg){
+    if (d.cfg.bolsasEdit) await setCfg('bolsasEdit', d.cfg.bolsasEdit);
+    if (d.cfg.bolsasExtra) await setCfg('bolsasExtra', d.cfg.bolsasExtra);
+    if (d.cfg.rubrosExtra) await setCfg('rubrosExtra', d.cfg.rubrosExtra);
+    if (d.cfg.rubrosNatEdit) await setCfg('rubrosNatEdit', d.cfg.rubrosNatEdit);
+  }
+
+  armarBolsas();
+  if (typeof renderSaldos==='function') renderSaldos();
+  render();
+  if (odActivo()) await odEscribir(snapshot());
+  toast('Datos locales reemplazados completamente por el respaldo');
+}
+
+async function reemplazarBaseOneDrive(){
+  if (!odActivo()) { toast('Conectá OneDrive primero', true); return; }
+  if (!confirm('¿Deseas REEMPLAZAR completamente los datos de este dispositivo con los de OneDrive?\n\nSe vaciarán los saldos, verificaciones y presupuestos locales y se cargarán los de OneDrive.')) return;
+  try {
+    const remoto = await odLeer();
+    if (!remoto) { toast('No hay respaldo diario.json en OneDrive', true); return; }
+    await reemplazarTodo(remoto);
+    toast('Base reemplazada con éxito desde OneDrive');
+  } catch(e) {
+    toast('Error al leer de OneDrive: ' + e.message, true);
+  }
+}
+
+async function autoRepararConciliacion(){
+  let count = 0;
+  for (const k of Object.keys(VER)){
+    const baseBolsa = k.replace(':propio', '');
+    const sem = semaforo(baseBolsa, k.endsWith(':propio'));
+    if (sem.st === 'bad' || sem.st === 'warn'){
+      delete VER[k];
+      await DB.del('ver', k);
+      count++;
+    }
+  }
+  armarBolsas();
+  if (typeof renderSaldos==='function') renderSaldos();
+  render();
+  if (odActivo()) await odSync();
+  toast('Conciliación reparada: '+count+' verificaciones con diferencia removidas.');
+}
+
+async function autoAjustarPresupuestosExcedidos(){
+  const y = ym || ymOf(new Date());
+  let count = 0;
+  if (!S || !S.rubros) return;
+  for (const r of S.rubros){
+    const st = estado(r.n, y);
+    if (st.st === 'bad' || (st.p === 0 && st.e > 0)){
+      const cuota = Math.ceil(st.e / 1000) * 1000;
+      const k = r.n + '|' + y;
+      PTO[k] = cuota;
+      PTO_TS[k] = Date.now();
+      await DB.put('pto', {k, v:cuota, ts:PTO_TS[k]});
+      count++;
+    }
+  }
+  render();
+  if (odActivo()) await odSync();
+  toast('Presupuestos ajustados: '+count+' cuotas asignadas.');
+}
+
+function abrirInspectorBD(){
+  let h = `<div style="max-width:680px;margin:0 auto">
+    <div class="f" style="margin-bottom:14px">
+      <h2 style="flex:1;margin:0">Inspección de BD · Descuadres y Registros</h2>
+      <button class="chipbtn" onclick="closePop()">✕ Cerrar</button>
+    </div>
+    <p class="note" style="margin-bottom:16px">Detalle exacto de las verificaciones y presupuestos en IndexedDB (<span class="mono">VER</span> y <span class="mono">PTO</span>):</p>`;
+
+  /* 1. Bolsas */
+  h += `<h4 style="margin:14px 0 8px">1. Bolsas con Descuadre de Conciliación</h4>`;
+  let countB = 0;
+  for (const b of BOLSAS){
+    const sem = semaforo(b.b, false);
+    const semP = semaforoPropio(b.b);
+    const items = [];
+    if (sem.st==='bad' || sem.st==='warn') items.push({key:b.b, sem, propio:false});
+    if (esPadre(b.b) && (semP.st==='bad' || semP.st==='warn')) items.push({key:b.b+':propio', sem:semP, propio:true});
+
+    for (const item of items){
+      countB++;
+      const s = item.sem;
+      const ver = s.ver;
+      const nb = b.alias || b.b;
+      const tag = item.propio ? ' (disponible propia)' : ' (total)';
+      h += `<div class="card" style="margin-bottom:10px;padding:12px;background:var(--bg2)">
+        <div class="f" style="margin-bottom:6px">
+          <b>${esc(nb)}${tag}</b>
+          <span class="mono" style="margin-left:auto;color:var(--bad);font-weight:700">${money(s.dif)}</span>
+        </div>
+        <div style="font-size:12px;color:var(--tx2);line-height:1.5;margin-bottom:8px">
+          • <b>Verificación en BD (VER):</b> ${ver ? money(ver.v) + ' (' + (ver.fecha||'sin fecha') + ')' : 'ninguna'}<br>
+          • <b>Saldo calculado a esa fecha:</b> ${money(s.alDia)}<br>
+          • <b>Movimientos posteriores:</b> ${money(s.post)}<br>
+          • <b>Diferencia a la fecha:</b> ${money(s.dif)}
+        </div>
+        <div class="f" style="gap:8px">
+          <button class="primary small gray" onclick="inspectorEditarVer('${item.key}', ${ver ? ver.v : 0}, '${ver ? ver.fecha : ''}')">Editar verificación</button>
+          <button class="primary small gray" style="color:var(--bad)" onclick="inspectorBorrarVer('${item.key}')">Eliminar de BD</button>
+        </div>
+      </div>`;
+    }
+  }
+  if (!countB) h += `<p class="note" style="color:var(--ok);margin-bottom:14px">✓ No hay bolsas con descuadre en la BD.</p>`;
+
+  /* 2. Presupuestos */
+  h += `<h4 style="margin:18px 0 8px">2. Rubros Excedidos o Sin Cuota (${ym})</h4>`;
+  let countP = 0;
+  if (S && S.rubros){
+    for (const r of S.rubros){
+      const st = estado(r.n, ym);
+      if (st.st === 'bad' || (st.p === 0 && st.e > 0)){
+        countP++;
+        h += `<div class="card" style="margin-bottom:10px;padding:12px;background:var(--bg2)">
+          <div class="f" style="margin-bottom:6px">
+            <b>${esc(r.n)}</b>
+            <span class="mono" style="margin-left:auto;color:var(--bad)">${st.p===0 ? 'Sin cuota' : 'Excedido'}</span>
+          </div>
+          <div style="font-size:12px;color:var(--tx2);line-height:1.5;margin-bottom:8px">
+            • <b>Gasto ejecutado en ${ym}:</b> ${money(st.e)}<br>
+            • <b>Cuota de presupuesto asignada (PTO):</b> ${money(st.p)}
+          </div>
+          <div class="f" style="gap:8px">
+            <button class="primary small gray" onclick="inspectorEditarPto('${esc(r.n)}', ${st.p}, ${st.e})">Fijar cuota en BD</button>
+          </div>
+        </div>`;
+      }
+    }
+  }
+  if (!countP) h += `<p class="note" style="color:var(--ok)">✓ No hay presupuestos excedidos en ${ym}.</p>`;
+
+  h += `</div>`;
+  openPop(h);
+}
+
+async function inspectorEditarVer(key, valActual, fechaActual){
+  const nVal = prompt('Escribí el nuevo valor verificado para '+key+' (número):', valActual);
+  if (nVal === null) return;
+  const nFecha = prompt('Escribí la fecha de la verificación (YYYY-MM-DD):', fechaActual || todayISO());
+  if (nFecha === null) return;
+  const v = parseFloat(nVal.replace(/[^0-9.-]/g,'')) || 0;
+  VER[key] = { v, fecha: nFecha, propio: key.endsWith(':propio') };
+  await DB.put('ver', { b: key, ...VER[key] });
+  armarBolsas();
+  if (typeof renderSaldos==='function') renderSaldos();
+  render();
+  if (odActivo()) await odSync();
+  toast('Verificación de '+key+' actualizada en BD.');
+  abrirInspectorBD();
+}
+
+async function inspectorBorrarVer(key){
+  if (!confirm('¿Eliminar la verificación de '+key+' de la base de datos?')) return;
+  delete VER[key];
+  await DB.del('ver', key);
+  armarBolsas();
+  if (typeof renderSaldos==='function') renderSaldos();
+  render();
+  if (odActivo()) await odSync();
+  toast('Verificación de '+key+' eliminada de la BD.');
+  abrirInspectorBD();
+}
+
+async function inspectorEditarPto(rubro, ptoActual, ejecActual){
+  const sug = Math.ceil(ejecActual / 1000) * 1000;
+  const val = prompt('Asignar cuota de presupuesto para «'+rubro+'» en '+ym+' (gastado: '+money(ejecActual)+'):', sug);
+  if (val === null) return;
+  const cuota = parseFloat(val.replace(/[^0-9.-]/g,'')) || 0;
+  const k = rubro + '|' + ym;
+  PTO[k] = cuota;
+  PTO_TS[k] = Date.now();
+  await DB.put('pto', { k, v: cuota, ts: PTO_TS[k] });
+  render();
+  if (odActivo()) await odSync();
+  toast('Cuota de '+rubro+' guardada en BD.');
+  abrirInspectorBD();
 }
 async function vincularArchivo(){
   if (!window.showSaveFilePicker){ toast('No soportado en este navegador', true); return; }
@@ -3849,7 +5172,7 @@ async function renderDb(){
   const d = await diagnostico();
   const sembrado = SA.flujos.length + S.rubros.length;
   let h = `<table>
-    <tr><td>Versión de la app</td><td class="mono">${VERSION}</td></tr>
+    <tr><td>Versión de la app</td><td class="mono">${VERSION} <button onclick="desinstalarSW()" class="chipbtn" style="margin-left:8px;font-size:11px;background:var(--bad);color:#fff">Forzar actualización</button></td></tr>
     <tr><td>Base inicial</td><td style="color:${hayDatos()?'var(--ok)':'var(--bad)'}">${
       hayDatos() ? nf.format(SH.n)+' movimientos · '+S.rubros.length+' rubros' : 'sin cargar'}</td></tr>
     <tr><td>Motor</td><td>IndexedDB</td></tr>
@@ -3959,6 +5282,12 @@ function valMercado(a){
   if (a.mercado==='BTC' && a.unidades && btcCOP())
     return {valor:a.unidades*btcCOP(), fecha:TASAS.btcFecha||todayISO(),
             nota:'en vivo: '+a.unidades+' BTC x '+money(btcCOP())};
+  if (a.unidades && a.precioUnitario) {
+    const cur = a.moneda || 'COP';
+    const cop = a.unidades * a.precioUnitario * trmDe(cur);
+    return {valor: Math.round(cop), fecha: a.valFecha || todayISO(),
+            nota: a.unidades + ' acciones/títulos x ' + montoEn(cur, a.precioUnitario)};
+  }
   return null;
 }
 
@@ -3988,6 +5317,9 @@ function tir(flows){
   if (flows.length<2) return null;
   const t = flows.map(x=>({d:new Date(x.f+'T00:00:00').getTime(), m:x.m}));
   const d0 = Math.min(...t.map(x=>x.d));
+  const d1 = Math.max(...t.map(x=>x.d));
+  /* si el periodo es menor a 30 días, la anualización produce valores absurdos */
+  if ((d1-d0) < 30*864e5) return null;
   const npv = r => t.reduce((s,x)=>
     s + x.m/Math.pow(1+r, (x.d-d0)/(365*864e5)), 0);
   let lo=-0.95, hi=10;
@@ -3999,7 +5331,9 @@ function tir(flows){
     const mid=(lo+hi)/2;
     if (npv(lo)*npv(mid) <= 0) hi=mid; else lo=mid;
   }
-  return (lo+hi)/2;
+  const r = (lo+hi)/2;
+  /* cap: si la TIR es absurda (>999% o <-99%), no es confiable */
+  return Math.abs(r) > 9.99 ? null : r;
 }
 
 const TIPO_NOM = {broker:'Broker', accion:'Acción', fondo:'Fondo', cuenta:'Cuenta',
@@ -4037,14 +5371,14 @@ function flujosDerivados(a){
 
 const flujosDe = id => {
   const a = ACT.find(x=>x.id===id);
-  return [...FLU.filter(f=>f.actId===id), ...flujosDerivados(a)]
+  return [...FLU.filter(f=>f.actId===id && !f.borrado), ...flujosDerivados(a)]
     .sort((x,y)=>x.fecha<y.fecha?-1:1);
 };
 const valDe = id => {
   const a = ACT.find(x=>x.id===id);
   const m = a ? valMercado(a) : null;      /* precio en vivo manda */
   if (m) return m;
-  const v = VAL.filter(x=>x.actId===id).sort((a,b)=>a.fecha<b.fecha?-1:1);
+  const v = VAL.filter(x=>x.actId===id && !x.borrado).sort((a,b)=>a.fecha<b.fecha?-1:1);
   return v.length ? v[v.length-1] : null;
 };
 
@@ -4141,6 +5475,8 @@ function detalle(id){
   let h = `<div class="card">
     <table>
       <tr><td>Tipo</td><td>${TIPO_NOM[a.tipo]||a.tipo}</td></tr>
+      ${a.unidades?`<tr><td>Acciones / Títulos</td><td class="mono">${a.unidades}</td></tr>`:''}
+      ${a.precioUnitario?`<tr><td>Precio por unidad</td><td class="mono">${montoEn(a.moneda||'COP', a.precioUnitario)}</td></tr>`:''}
       <tr><td>Aportado</td><td class="mono">${money(m.ap)}</td></tr>
       <tr><td>Recibido</td><td class="mono">${money(m.re)}</td></tr>
       <tr><td>Capital expuesto</td><td class="mono">${money(m.expuesto)}</td></tr>
@@ -4155,6 +5491,7 @@ function detalle(id){
     ${m.val?'':`<p class="note" style="margin-top:10px;color:var(--warn)">Sin valoración no hay TIR. Es el único dato que falta.</p>`}
   </div>
   <button class="primary" id="detVal" style="margin-bottom:8px">Actualizar valoración</button>
+  <button class="primary gray" id="detTrii" style="margin-bottom:8px;background:var(--bg3)">🔍 Consultar / Cotizar en Trii (BVC / Broker)</button>
   <button class="primary gray" id="detFlu" style="margin-bottom:14px">Registrar flujo</button>
   <div class="card"><h3>Flujos (${fs.length})</h3><table>`;
   for (const f of [...fs].reverse().slice(0,40)){
@@ -4166,14 +5503,124 @@ function detalle(id){
   h += `</table>${fs.length>40?'<p class="note">Mostrando los 40 más recientes.</p>':''}</div>`;
   $('#detBody').innerHTML = h;
   $('#det').style.display='flex';
+  $('#detTrii').onclick = () => abrirCotizadorTrii(a);
   $('#detVal').onclick = async () => {
-    const v = prompt('Valor actual de '+a.n+' en pesos', m.val?Math.round(m.val.valor):'');
-    if (v===null) return;
+    const modoAcc = confirm('¿Deseas actualizar ingresando el número de acciones/títulos y precio por unidad?\n\nAceptar: Ingresar acciones/títulos y precio unitario.\nCancelar: Ingresar valor total directamente en pesos.');
+    let vTotal = 0, notaVal = 'ingresada a mano';
+    const cur = a.moneda || 'COP';
+    if (modoAcc){
+      const u = prompt('Número de acciones / títulos', a.unidades || '1');
+      if (u===null) return;
+      const pu = prompt('Precio unitario en ' + cur, a.precioUnitario || (m.val ? (m.val.valor/u) : '0'));
+      if (pu===null) return;
+      a.unidades = +u || 0;
+      a.precioUnitario = +pu || 0;
+      vTotal = Math.round(a.unidades * a.precioUnitario * trmDe(cur));
+      notaVal = a.unidades + ' u. x ' + montoEn(cur, a.precioUnitario);
+      await DB.put('act', a);
+    } else {
+      const v = prompt('Valor actual de '+a.n+' en pesos', m.val?Math.round(m.val.valor):'');
+      if (v===null) return;
+      vTotal = +v || 0;
+    }
     const f = prompt('Fecha de la valoración (AAAA-MM-DD)', todayISO()) || todayISO();
-    const rec = {id:uuid(), actId:id, fecha:f, valor:+v||0, nota:'ingresada a mano', ts:Date.now()};
+    a.valFecha = f;
+    await DB.put('act', a);
+    const rec = {id:uuid(), actId:id, fecha:f, valor:vTotal, nota:notaVal, ts:Date.now()};
     VAL.push(rec); await DB.put('val', rec);
+    if (a.bolsa && BOLSA[a.bolsa]){
+      VER[a.bolsa] = {v: vTotal / trmDe(cur), fecha: f};
+      await DB.put('ver', {b:a.bolsa, v: VER[a.bolsa].v, fecha: f});
+    }
     detalle(id); renderAct(); autoSave(); toast('Valoración guardada');
   };
+
+const ACCIONES_TRII = [
+  {s:'ECOPETROL', n:'Ecopetrol S.A. (BVC)', c:'COP', y:'ECOPETROL.CB'},
+  {s:'PFBCOLOM', n:'Bancolombia Preferencial (BVC)', c:'COP', y:'PFBCOLOM.CB'},
+  {s:'BCOLOMBIA', n:'Bancolombia Ordinaria (BVC)', c:'COP', y:'BCOLOMBIA.CB'},
+  {s:'ISA', n:'Interconexión Eléctrica (BVC)', c:'COP', y:'ISA.CB'},
+  {s:'GEB', n:'Grupo Energía Bogotá (BVC)', c:'COP', y:'GEB.CB'},
+  {s:'PFCEMARGOS', n:'Cementos Argos Pref. (BVC)', c:'COP', y:'PFCEMARGOS.CB'},
+  {s:'CEMARGOS', n:'Cementos Argos Ord. (BVC)', c:'COP', y:'CEMARGOS.CB'},
+  {s:'PFGRUPOAV', n:'Grupo Aval Pref. (BVC)', c:'COP', y:'PFGRUPOAV.CB'},
+  {s:'PFGRUPSURA', n:'Grupo Sura Pref. (BVC)', c:'COP', y:'PFGRUPSURA.CB'},
+  {s:'NUTRESA', n:'Grupo Nutresa (BVC)', c:'COP', y:'NUTRESA.CB'},
+  {s:'PFDAVVNDA', n:'Davivienda Pref. (BVC)', c:'COP', y:'PFDAVVNDA.CB'},
+  {s:'CELSIA', n:'Celsia S.A. (BVC)', c:'COP', y:'CELSIA.CB'},
+  {s:'PEI', n:'PEI Inmobiliario (BVC)', c:'COP', y:'PEI.CB'},
+  {s:'NU', n:'Nu Holdings (Mercado Global Trii)', c:'USD', y:'NU'},
+  {s:'AAPL', n:'Apple Inc. (Mercado Global Trii)', c:'USD', y:'AAPL'},
+  {s:'MSFT', n:'Microsoft (Mercado Global Trii)', c:'USD', y:'MSFT'},
+  {s:'AMZN', n:'Amazon (Mercado Global Trii)', c:'USD', y:'AMZN'},
+  {s:'NVDA', n:'NVIDIA Corp. (Mercado Global Trii)', c:'USD', y:'NVDA'},
+  {s:'SPY', n:'SPDR S&P 500 ETF (Mercado Global Trii)', c:'USD', y:'SPY'}
+];
+
+async function buscarCotizacionYahoo(symbol){
+  try {
+    const item = ACCIONES_TRII.find(x=>x.s===symbol) || {y:symbol};
+    const target = item.y;
+    const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(target)}?interval=1d&range=1d`;
+    const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+    const d = await fetchJSON(proxyUrl, 6000);
+    if (d && d.chart && d.chart.result && d.chart.result[0]){
+      const meta = d.chart.result[0].meta;
+      const p = meta.regularMarketPrice || meta.previousClose;
+      if (p) return p;
+    }
+  } catch(e){}
+  return null;
+}
+
+async function abrirCotizadorTrii(a){
+  const opts = ACCIONES_TRII.map((x,i)=>(i+1)+') '+x.s+' — '+x.n).join('\n');
+  const sel = prompt('Elige la acción en Trii / Broker:\n'+opts+'\n\nO escribe el símbolo directo (ej: ECOPETROL, PFBCOLOM, NU, AAPL):', a.ticker || 'ECOPETROL');
+  if (sel===null) return;
+  let item = null;
+  const num = +sel;
+  if (!isNaN(num) && num>=1 && num<=ACCIONES_TRII.length){
+    item = ACCIONES_TRII[num-1];
+  } else {
+    const sym = sel.trim().toUpperCase();
+    item = ACCIONES_TRII.find(x=>x.s===sym) || {s:sym, n:sym, c:'COP', y:sym};
+  }
+  
+  toast('Consultando cotización de ' + item.s + '...');
+  let precio = await buscarCotizacionYahoo(item.s);
+  if (!precio){
+    const pStr = prompt('No se pudo obtener precio automático. Ingresa el precio por acción de ' + item.s + ' en Trii (' + item.c + '):', a.precioUnitario || '0');
+    if (pStr===null) return;
+    precio = +pStr || 0;
+  } else {
+    const pStr = prompt('Cotización obtenida para ' + item.s + ': ' + montoEn(item.c, precio) + '.\nConfirma o modifica el precio unitario:', precio);
+    if (pStr===null) return;
+    precio = +pStr || precio;
+  }
+  
+  const uStr = prompt('¿Cuántas acciones / títulos de ' + item.s + ' tienes en Trii / Broker?', a.unidades || '1');
+  if (uStr===null) return;
+  const u = +uStr || 0;
+  
+  a.ticker = item.s;
+  a.unidades = u;
+  a.precioUnitario = precio;
+  a.moneda = item.c;
+  a.valFecha = todayISO();
+  await DB.put('act', a);
+  
+  const valCOP = Math.round(u * precio * trmDe(item.c));
+  const rec = {id:uuid(), actId:a.id, fecha:todayISO(), valor:valCOP, nota:item.s+' · '+u+' u. x '+montoEn(item.c, precio), ts:Date.now()};
+  VAL.push(rec); await DB.put('val', rec);
+  
+  if (a.bolsa && BOLSA[a.bolsa]){
+    VER[a.bolsa] = {v: valCOP / trmDe(monedaDe(a.bolsa)), fecha: todayISO()};
+    await DB.put('ver', {b:a.bolsa, v: VER[a.bolsa].v, fecha: todayISO()});
+  }
+  
+  detalle(a.id); renderAct(); autoSave();
+  toast('Trii: ' + u + ' acciones de ' + item.s + ' (' + money(valCOP) + ') guardadas');
+}
   $('#detFlu').onclick = async () => {
     const tipos = Object.keys(FLUJO_NOM);
     const t = prompt('Tipo de flujo:\n'+tipos.map((x,i)=>(i+1)+') '+FLUJO_NOM[x]).join('\n'), '3');
@@ -4192,7 +5639,8 @@ function detalle(id){
   };
   $('#detBody').onclick = async e => {
     const fid = e.target.dataset.delf; if(!fid) return;
-    FLU = FLU.filter(x=>x.id!==fid); await DB.del('flu', fid);
+    const fObj = FLU.find(x=>x.id===fid);
+    if (fObj){ fObj.borrado = Date.now(); await DB.put('flu', fObj); }
     detalle(id); renderAct(); autoSave(); toast('Flujo borrado');
   };
 }
@@ -4283,7 +5731,8 @@ const odActivo = () => !!(ODT.access || ODT.refresh);
 /* --- lectura y escritura del archivo --- */
 async function odLeer(){
   const t = await odToken();
-  const r = await fetch(OD.api+':/content', {headers:{Authorization:'Bearer '+t}});
+  const url = OD.api + ':/content?_t=' + Date.now();
+  const r = await fetch(url, {headers:{Authorization:'Bearer '+t}, cache:'no-cache'});
   if (r.status===404) return null;          /* primera vez: aún no existe */
   if (!r.ok) throw new Error('no se pudo leer ('+r.status+')');
   return await r.json();
@@ -4320,7 +5769,13 @@ async function odSync(silencio){
   } catch(e){
     ODT.err = e.message || String(e);
     if (!silencio) toast('OneDrive: '+ODT.err, true);
-  } finally { odEnCurso = false; renderOd(); }
+  } finally {
+    odEnCurso = false;
+    renderOd();
+    armarBolsas();
+    if (typeof renderSaldos==='function') renderSaldos();
+    if (typeof render==='function') render();
+  }
 }
 
 /* rebote: sincroniza 4 s después del último cambio, no en cada tecla */
@@ -4489,15 +5944,67 @@ function wizPintar(){
       <tr><td>Tendencia año contra año</td><td class="mono">${
         s.tend==null?'—':(s.tend>0?'+':'')+(s.tend*100).toFixed(0)+'%'}</td></tr>
     </table>`;
-  /* El pie se reconstruye en cada paso. Antes se vinculaba una sola vez al
-     arrancar la app, y el resumen final lo reemplazaba: al volver a abrir el
-     asistente los botones ya no existían y no se podía recalibrar de nuevo. */
-  $('#wizPie').innerHTML =
-    `<input type="number" id="wizOtro" placeholder="Escribir otro monto" step="any">
-     <div class="row">
-       <button class="primary gray" id="wizMant">Dejar como está</button>
-       <button class="primary" id="wizAcep">Aceptar</button>
-     </div>`;
+  const isEvento = it.nat === 'Evento';
+  const v = isEvento ? vigencia(it.r) : null;
+
+  if (isEvento){
+    $('#wizPie').innerHTML = `
+      <div style="background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:10px;margin-bottom:10px">
+        <div style="font-size:11.5px;color:var(--tx3);margin-bottom:6px">Fijar monto por cuota mensual o meta total:</div>
+        <div style="display:flex;gap:8px;margin-bottom:6px">
+          <div style="flex:1">
+            <div style="font-size:10.5px;color:var(--tx2)">Cuota mensual ($/mes)</div>
+            <input type="number" id="wizOtro" placeholder="${s.val}" step="any" style="width:100%">
+          </div>
+          <div style="flex:1">
+            <div style="font-size:10.5px;color:var(--tx2)">Meta total (${v.meses} meses)</div>
+            <input type="number" id="wizOtroMeta" placeholder="${s.val * v.meses}" step="any" style="width:100%">
+          </div>
+        </div>
+        <div id="wizCalculoMeta" style="font-size:11px;color:var(--acc);font-weight:550;text-align:right">
+          = ${money(s.val)} / mes · ${money(s.val * v.meses)} en todo el sobre
+        </div>
+      </div>
+      <div class="row">
+        <button class="primary gray" id="wizMant">Dejar como está</button>
+        <button class="primary" id="wizAcep">Aceptar</button>
+      </div>`;
+
+    const inpCuota = $$real('#wizOtro');
+    const inpMeta = $$real('#wizOtroMeta');
+    const txtCalc = $$real('#wizCalculoMeta');
+
+    if (inpCuota && inpMeta){
+      inpCuota.oninput = () => {
+        const valC = +inpCuota.value || 0;
+        if (valC > 0){
+          inpMeta.value = Math.round(valC * v.meses);
+          txtCalc.textContent = `= ${money(valC)} / mes · ${money(valC * v.meses)} en todo el sobre`;
+        } else {
+          inpMeta.value = '';
+          txtCalc.textContent = `= ${money(s.val)} / mes · ${money(s.val * v.meses)} en todo el sobre`;
+        }
+      };
+      inpMeta.oninput = () => {
+        const valM = +inpMeta.value || 0;
+        if (valM > 0){
+          const valC = Math.round(valM / v.meses);
+          inpCuota.value = valC;
+          txtCalc.textContent = `= ${money(valC)} / mes · ${money(valM)} en todo el sobre`;
+        } else {
+          inpCuota.value = '';
+          txtCalc.textContent = `= ${money(s.val)} / mes · ${money(s.val * v.meses)} en todo el sobre`;
+        }
+      };
+    }
+  } else {
+    $('#wizPie').innerHTML =
+      `<input type="number" id="wizOtro" placeholder="Escribir otro monto" step="any">
+       <div class="row">
+         <button class="primary gray" id="wizMant">Dejar como está</button>
+         <button class="primary" id="wizAcep">Aceptar</button>
+       </div>`;
+  }
   $('#wizAcep').onclick = () => {
     const otro = $$real('#wizOtro').value;
     wizFijar(otro!=='' ? +otro : WZ.lista[WZ.i].sug.val);
@@ -4513,11 +6020,13 @@ function wizPintar(){
 
 async function wizFijar(v){
   const it = WZ.lista[WZ.i];
-  if (v !== null && Math.round(v) !== it.act){
+  if (v !== null){
     const k = it.r+'|'+ym;
-    PTO[k] = Math.round(v);
-    await DB.put('pto', {k, v:Math.round(v), ts:Date.now()});
-    WZ.cambios.push({r:it.r, de:it.act, a:Math.round(v)});
+    const ts = Date.now();
+    PTO[k] = Math.round(v); PTO_TS[k] = ts;
+    await DB.put('pto', {k, v:Math.round(v), ts});
+    if (Math.round(v) !== it.act)
+      WZ.cambios.push({r:it.r, de:it.act, a:Math.round(v)});
   }
   WZ.i++; wizPintar(); autoSave();
 }
@@ -4644,34 +6153,19 @@ function deltaLocal(nb, hasta){
 
 /* el saldo de una cuenta con bolsillos es la suma de sus bolsillos */
 const saldoPropio = (nb, hasta) => (BOLSA[nb] ? BOLSA[nb].saldo : 0) + deltaLocal(nb, hasta);
-const saldoDe = nb => saldoPropio(nb) + hijos(nb).reduce((s,h)=>s+saldoPropio(h.b),0);
+const saldoDe = (nb, hasta) => {
+  const hs = hijos(nb);
+  /* si tiene bolsillos, el saldo del padre es su propio saldo (plata sin
+     asignar a ningún bolsillo) más la suma de los hijos */
+  if (hs.length) return saldoPropio(nb, hasta) + hs.reduce((s,h) => s + saldoPropio(h.b, hasta), 0);
+  return saldoPropio(nb, hasta);
+};
 const enPesos = (nb, s) => {
   const c = BOLSA[nb] ? BOLSA[nb].moneda : 'COP';
   return c === 'COP' ? s : s * trmDe(c);
 };
 
-function renderSaldos(){
-  armarBolsas();
-  const filas = BOLSAS.filter(b=>!b.padre).map(b=>{
-    const s = saldoDe(b.b);
-    const cop = enPesos(b.b, s);
-    const v = VER[b.b];
-    return {...b, s, cop, ver: v ? v.v : null, verF: v ? v.fecha : null,
-            dif: v ? s - v.v : null};
-  }).filter(x => Math.abs(x.s) > 0.5 || x.ver != null);
-
-  const tot = g => filas.filter(x=>x.grupo===g).reduce((a,x)=>a+x.cop,0);
-  const disp = tot('Disponible'), aho = tot('Ahorro e inversión'),
-        pre = tot('Prestado'), deu = tot('Deuda');
-  /* ---- balance consolidado: activos contra pasivos, a la misma escala ---- */
-  const act = disp + aho + pre;
-  const patrimonio = act - deu;
-  const esc = Math.max(act, deu) || 1;
-  const seg = [
-    {k:'a1', n:'Disponible',         v:disp},
-    {k:'a2', n:'Ahorro e inversión', v:aho},
-    {k:'a3', n:'Prestado',           v:pre}
-  ].filter(x=>x.v>0);
+function renderHeaderBalance(act, deu, patrimonio, esc, seg){
   $('#balA').textContent = money(act);
   $('#balP').textContent = money(deu);
   $('#balBarA').innerHTML = seg.map(x=>{
@@ -4690,7 +6184,9 @@ function renderSaldos(){
     : 'Sin deuda registrada.';
   $('#slPat').textContent = money(patrimonio);
   $('#slPat').style.color = patrimonio<0 ? 'var(--bad)' : 'var(--tx)';
+}
 
+function renderLiquidezPanel(disp, aho, pre, act, deu, patrimonio){
   $('#slLiq').textContent = money(disp);
   $('#slLiq').style.color = disp < 0 ? 'var(--bad)' : 'var(--tx)';
   const veces = deu>0 ? disp/deu : null;
@@ -4706,7 +6202,9 @@ function renderSaldos(){
     <tr><td><b>Activos</b></td><td class="mono"><b>${money(act)}</b></td></tr>
     <tr><td>Deudas</td><td class="mono" style="color:var(--bad)">−${money(deu)}</td></tr>
     <tr class="tot"><td>Patrimonio neto</td><td class="mono">${money(patrimonio)}</td></tr></table>`;
+}
 
+function renderBolsasJerarquia(filas, tot){
   const fila = (x, sub) => {
     const cur = x.moneda!=='COP';
     const sm = semaforo(x.b);
@@ -4718,26 +6216,68 @@ function renderSaldos(){
           ${x.nota?`<em>${x.nota}</em>`:''}
           ${hs.length?`<em>${hs.length} bolsillos · tocá para ${abierta?'cerrar':'ver'}</em>`:''}
           ${cur?`<em>${montoEn(x.moneda,x.s)} · TRM ${money(trmDe(x.moneda))}</em>`:''}
-          ${!hs.length ? `<em>${sm.st==='gris' ? 'sin verificar'
-            : sm.st==='ok' ? 'cuadra · '+x.verF
-            : sm.et+' · '+money(sm.dif)}</em>` : ''}</div>
+          <em>${sm.st==='gris' ? 'sin verificar'
+            : sm.st==='ok' ? 'cuadra · '+(x.verF||(sm.ver&&sm.ver.fecha)||'')
+            : sm.et+' · '+money(sm.dif)}</em></div>
         <div class="sl-v mono">${money(x.cop)}</div>
+        <button type="button" class="chipbtn bsa-conc-btn" data-conc="${x.b}" style="font-size:11px;padding:2px 8px;margin-left:6px">Conciliar</button>
       </div>`
-      + (hs.length && abierta ? hs.map(h=>{
-          const sp = saldoPropio(h.b);
-          return fila({...h, s:sp, cop:enPesos(h.b,sp),
-                       ver:(VER[h.b]||{}).v ?? null, verF:(VER[h.b]||{}).fecha,
-                       dif: VER[h.b]!=null ? sp-VER[h.b].v : null}, true);
-        }).join('') : '');
+      + (hs.length && abierta ? (()=>{
+          const madreS = saldoPropio(x.b);
+          const smM = semaforoPropio(x.b);
+          const filaM = `<div class="sl-r sub" data-b-propio="${x.b}" style="cursor:pointer" title="Conciliar la cuenta principal sin bolsillos">
+                <div class="sl-n" style="color:var(--tx2)">${nomB(x.b)} <em style="font-style:normal;opacity:.7">(disponible propia)</em>
+                  <em>${smM.st==='gris' ? 'sin verificar' : smM.st==='ok' ? 'cuadra' : smM.et+' · '+money(smM.dif)}</em></div>
+                <div class="sl-v mono" style="color:var(--tx2)">${money(enPesos(x.b,madreS))}</div>
+                <button type="button" class="chipbtn" data-conc-propio="${x.b}" style="font-size:10px;padding:2px 6px;margin-left:6px">Conciliar propia</button>
+              </div>`;
+          return filaM + hs.map(h=>{
+              const sp = saldoPropio(h.b);
+              return fila({...h, s:sp, cop:enPesos(h.b,sp),
+                           ver:(VER[h.b]||{}).v ?? null, verF:(VER[h.b]||{}).fecha,
+                           dif: VER[h.b]!=null ? sp-VER[h.b].v : null}, true);
+            }).join('');
+        })() : '');
   };
   $('#slList').innerHTML = GRUPOS.map(g=>{
     const sub = filas.filter(x=>x.grupo===g).sort((a,b)=>b.cop-a.cop);
     if (!sub.length) return '';
+    const btnIr = g==='Prestado' ? `<div style="padding:6px 14px 2px"><button class="chipbtn on" style="font-size:12px;padding:4px 10px" onclick="$$('#segAct .seg[data-av=\\'pre\\']')[0].click()">Ir al Módulo de Préstamos →</button></div>` : '';
     return `<div class="sl-g">${g}<span class="mono">${money(tot(g))}</span></div>`
+      + btnIr
       + sub.map(x=>fila(x,false)).join('');
   }).join('');
+}
+
+function renderSaldos(){
+  armarBolsas();
+  const filas = BOLSAS.filter(b=>!b.padre).map(b=>{
+    const s = saldoDe(b.b);
+    const cop = enPesos(b.b, s);
+    const v = VER[b.b];
+    return {...b, s, cop, ver: v ? v.v : null, verF: v ? v.fecha : null,
+            dif: v ? s - v.v : null};
+  }).filter(x => Math.abs(x.s) > 0.5 || x.ver != null);
+
+  const tot = g => filas.filter(x=>x.grupo===g).reduce((a,x)=>a+x.cop,0);
+  const disp = tot('Disponible'), aho = tot('Ahorro e inversión'),
+        pre = tot('Prestado'), deu = tot('Deuda');
+  const act = disp + aho + pre;
+  const patrimonio = act - deu;
+  const esc = Math.max(act, deu) || 1;
+  const seg = [
+    {k:'a1', n:'Disponible',         v:disp},
+    {k:'a2', n:'Ahorro e inversión', v:aho},
+    {k:'a3', n:'Prestado',           v:pre}
+  ].filter(x=>x.v>0);
+
+  renderHeaderBalance(act, deu, patrimonio, esc, seg);
+  renderLiquidezPanel(disp, aho, pre, act, deu, patrimonio);
+  renderBolsasJerarquia(filas, tot);
+
   const _c=$$real('#slCorte'); if(_c) _c.textContent = SS.corte;
   renderConcil();
+  renderPtoControl();
 }
 function renderBolsas(){
   armarBolsas();
@@ -4993,11 +6533,11 @@ function rehidratar(){
 /* lo registrado en la app se suma al histórico, con la misma forma */
 function universo(){
   const loc = MOV.filter(m=>vivo(m) && m.tipo!=='traslado').map(m=>({
-    f:m.fecha, r:m.r, c:(RB[m.r]||{}).cat||'', b:m.bolsa,
+    id:m.id, f:m.fecha, r:m.r, c:(RB[m.r]||{}).cat||'', b:m.bolsa,
     v:m.valor, o:m.obs||'', i:(RB[m.r]||{}).nat==='Ingreso'?1:0,
     m:m.moneda||'COP', vo:m.valorOrig!=null?m.valorOrig:m.valor, src:'app'}));
   const tras = (HFIL.tipo==='todo'||HFIL.tipo==='traslado') ? MOV.filter(m=>vivo(m) && m.tipo==='traslado').map(m=>({
-    f:m.fecha, r:'⇄ '+nomB(m.de)+' → '+nomB(m.a), c:'Traslado', b:nomB(m.de),
+    id:m.id, f:m.fecha, r:'⇄ '+nomB(m.de)+' → '+nomB(m.a), c:'Traslado', b:m.de, de:m.de, a:m.a,
     v:m.valor, o:m.obs||'', i:0, m:'COP', vo:m.valor, src:'app'})) : [];
   return [...(HIST||[]), ...loc, ...tras];
 }
@@ -5025,7 +6565,7 @@ function filtrar(){
     if (HFIL.tipo==='traslado' && !traslado) return false;
     if (HFIL.cat && m.c !== HFIL.cat) return false;
     if (HFIL.rub && m.r !== HFIL.rub) return false;
-    if (HFIL.bol && m.b !== HFIL.bol) return false;
+    if (HFIL.bol && m.b !== HFIL.bol && m.de !== HFIL.bol && m.a !== HFIL.bol) return false;
     if (q && !(sinTilde(m.r).includes(q) || sinTilde(m.b).includes(q)
             || sinTilde(m.o).includes(q) || sinTilde(m.c).includes(q))) return false;
     return true;
@@ -5175,7 +6715,9 @@ function renderHist(){
       <div class="a"><b>${m.r}</b>
         <span>${m.f} · ${m.b||'—'}${m.m!=='COP'?' · '+montoEn(m.m,m.vo):''}${
           m.o?' · '+m.o:''}${m.src==='app'?' · registrado acá':''}</span></div>
-      <div class="v">${money(m.v)}</div></div>`).join('');
+      <div class="v">${money(m.v)}
+        ${m.id ? `<button class="chipbtn" data-editmov="${m.id}" style="padding:2px 8px;font-size:11px;margin-left:8px">Editar</button>` : ''}
+      </div></div>`).join('');
   const abierta = $('#hLista').style.display !== 'none';
   $('#hMasFilas').style.display = (abierta && S2.length>HLIM) ? 'block' : 'none';
   $('#hMasFilas').textContent = `Ver más · ${nf.format(S2.length-HLIM)} restantes`;
@@ -5550,7 +7092,7 @@ function renderHome(){
   $('#hoL2').textContent = Math.round(pc*100)+'% del mes';
 
   /* --- accesos de registro --- */
-  let top = S.rubros.filter(r=>r.nat!=='Ingreso' && r.nat!=='Nómina' && r.uso>0).slice(0,7);
+  let top = S.rubros.filter(r=>r.nat!=='Nómina' && r.uso>0).slice(0,7);
   if (libre.si){   /* en día libre, los rubros de ocio saltan al frente */
     const oc = ocioR.map(n=>RB[n]).filter(Boolean);
     top = [...oc, ...top.filter(r=>!ocioR.includes(r.n))].slice(0,7);
@@ -5563,7 +7105,9 @@ function renderHome(){
       ${svg(icono(r.n, r.cat))}<span class="e">${r.n}</span></button>`;
   }).join('')
   + `<button class="htile acc" data-ir="mover">${svg(ICONOS.mover)}
-      <span class="e">Mover</span></button>`;
+      <span class="e">Mover</span></button>`
+  + `<button class="htile acc" data-ir="nomina" style="background:var(--acc2);border-color:var(--acc2)">${svg(ICONOS.trabajo)}
+      <span class="e">Nómina</span></button>`;
 
   /* --- tarjetas de estado --- */
   const holg = holgura(ym);
@@ -5597,13 +7141,53 @@ function renderHome(){
     d:sobNeg.slice(0,3).join(', '), ir:'panel'});
   if (!odActivo()) av.push({st:'warn', t:'Sincronización sin conectar',
     d:'los datos viven solo en este dispositivo', ir:'cfg'});
-  if (+ymOf(new Date()).slice(5,7)===+ym.slice(5,7) && new Date().getDate()>=25)
-    av.push({st:'ok', t:'Es día de recalibrar', d:'revisá el presupuesto del mes que entra', ir:'panel'});
+  /* --- avisos de facturas de servicios públicos y telefonía (3 días hábiles / JSON) --- */
+  const servRubros = S.rubros.filter(r => 
+    r.cat === 'Servicios' || r.cat === 'Salud' || 
+    /servicio|claro|agua|energia|gas|telefon|internet|tigo|movistar|celular/i.test(r.n)
+  );
+
+  const hoyISO = todayISO();
+  for (const r of servRubros){
+    const pagado = MOV.some(m => vivo(m) && m.ym === ym && m.rubro === r.n);
+    if (pagado) continue;
+
+    const fac = getFacturaMes(r.n, ym);
+    if (!fac){
+      av.unshift({
+        st: 'warn',
+        t: `📄 Falta fecha de vencimiento: <b>${r.n}</b>`,
+        d: `No se encontró factura para ${ymLabel(ym)}. Toca para cargar JSON en Ajustes.`,
+        ir: 'cfg'
+      });
+    } else {
+      const habiles = diasHabilesEntre(hoyISO, fac.vencimiento);
+      if (habiles <= 3){
+        let msg = '';
+        if (habiles < 0){
+          msg = `🚨 <b>${r.n}</b> vencido hace ${Math.abs(habiles)} ${Math.abs(habiles)===1?'día hábil':'días hábiles'} (${fac.vencimiento})`;
+        } else if (habiles === 0){
+          msg = `🚨 <b>${r.n}</b> VENCE HOY (${fac.vencimiento})`;
+        } else {
+          msg = `🚨 <b>${r.n}</b> vence en <b>${habiles} ${habiles===1?'día hábil':'días hábiles'}</b> (${fac.vencimiento})`;
+        }
+
+        av.unshift({
+          st: 'bad',
+          t: msg,
+          d: `${money(fac.monto||fac.valor||0)} sin registrar · Tocá para pagar ahora`,
+          ir: 'reg_pad',
+          rubro: r.n,
+          monto: fac.monto||fac.valor||0
+        });
+      }
+    }
+  }
 
   $('#hoAvisos').style.display = av.length?'block':'none';
   $('#hoAvisosT').style.display = av.length?'flex':'none';
   $('#hoAvisos').innerHTML = av.map(a=>
-    `<div class="havi ${a.st}" data-ir="${a.ir}"><i></i>
+    `<div class="havi ${a.st}" data-ir="${a.ir}" data-rubro="${a.rubro||''}" data-monto="${a.monto||''}"><i></i>
       <span>${a.t}<div style="font-size:11.5px;color:var(--tx3)">${a.d}</div></span>
       <em>›</em></div>`).join('');
 
@@ -5633,21 +7217,28 @@ function renderHome(){
 function tolerancia(saldo){
   return Math.max(1000, Math.abs(saldo)*0.005);
 }
-function semaforo(nb){
-  if (hijos(nb).length) return {st:'gris', et:'suma de bolsillos', dif:null};
-  const v = VER[nb];
+function verClave(nb, forcePropio){
+  return (forcePropio && esPadre(nb)) ? (nb + ':propio') : nb;
+}
+function semaforo(nb, forcePropio){
+  const clave = verClave(nb, forcePropio);
+  const v = VER[clave];
   if (!v) return {st:'gris', et:'sin verificar', dif:null};
-  /* el saldo que el sistema creía tener EL DÍA de la verificación */
-  const alDia = saldoPropio(nb, v.fecha);
+  const hs = hijos(nb);
+  const esProp = !!forcePropio;
+  const usaTotal = hs.length > 0 && !esProp;
+  const alDia = usaTotal ? saldoDe(nb, v.fecha) : saldoPropio(nb, v.fecha);
   const dif = alDia - v.v, tol = tolerancia(v.v);
   const dias = Math.round((Date.now() - new Date(v.fecha+'T12:00'))/864e5);
-  const post = saldoPropio(nb) - alDia;    /* movimientos posteriores */
-  const base = {dif, ver:v, alDia, dias, post};
+  const curS = usaTotal ? saldoDe(nb) : saldoPropio(nb);
+  const post = curS - alDia;
+  const base = {dif, ver:v, alDia, dias, post, usaTotal, clave};
   if (Math.abs(dif) >= 1 && Math.abs(dif) > tol) return {...base, st:'bad', et:'no cuadra'};
   if (Math.abs(dif) >= 1)                        return {...base, st:'warn', et:'diferencia menor'};
   if (dias > 35) return {...base, st:'warn', et:'conviene reverificar', vieja:true};
   return {...base, st:'ok', et:'cuadra'};
 }
+const semaforoPropio = nb => semaforo(nb, true);
 
 /* rubros para cargar la diferencia, según de qué lado esté */
 const AJ_GASTO   = ['Costos Bancarios','Intereses','Impuestos Vehículo','Otros'];
@@ -5661,31 +7252,51 @@ const esInversion = nb => { const i = BOLSA[nb];
   return !!i && i.grupo==='Ahorro e inversión'
       && i.tipo!=='Prestado' && i.tipo!=='Deuda' && !hijos(nb).length; };
 
-function abrirBolsa(nb){
+function abrirBolsa(nb, esPropio){
   BSA = {b:nb, rubro:null, contra:(nb==='Caja' ? 'Ahorro$' : null),
-    modo: esInversion(nb) ? 'valor' : 'rubro'};
+    modo: esInversion(nb) ? 'valor' : 'rubro',
+    propio: !!esPropio};
   $('#bsaTit').textContent = nomB(nb);
   bsaPintar();
   $('#bsa').style.display='flex';
 }
+function abrirBolsaPropio(nb){ abrirBolsa(nb, true); }
 function cerrarBolsa(){ $('#bsa').style.display='none'; renderSaldos(); }
 
 function bsaPintar(){
   const nb = BSA.b, info = BOLSA[nb]||{};
   const cur = info.moneda || 'COP';
-  const s = saldoPropio(nb);
-  const sem = semaforo(nb);
+  const hs = hijos(nb);
+  const esPropio = !!BSA.propio;
+  const clave = verClave(nb, esPropio);
+  const usaTotal = hs.length > 0 && !esPropio;
+  const s = usaTotal ? saldoDe(nb) : saldoPropio(nb);
+  const sem = semaforo(nb, esPropio);
   const dif = sem.dif;
   const falta = dif!=null && Math.abs(dif) >= 1;
 
-  /* El signo de la diferencia decide qué rubros valen. Si el elegido quedó
-     del lado contrario —porque la diferencia cambió de signo al reverificar—
-     hay que soltarlo, o se ofrecería registrar un ingreso como gasto. */
   const opciones = (dif>0 ? AJ_GASTO : AJ_INGRESO).filter(r=>RB[r]);
   if (!opciones.includes(BSA.rubro)) BSA.rubro = opciones[0] || null;
 
-  let h = `<div class="concil">
-      <div><span>Saldo hoy</span><b class="mono">${montoEn(cur,s)}</b></div>
+  let h = '';
+  if (hs.length > 0){
+    h += `<div style="background:var(--bg3);border:1px solid var(--line2);border-radius:12px;padding:10px 12px;margin-bottom:12px;font-size:13px">
+      <div style="font-weight:600;margin-bottom:4px">Bolsa madre con ${hs.length} bolsillos</div>
+      <div style="display:flex;justify-content:space-between;color:var(--tx2);margin-bottom:2px">
+        <span>Saldo total acumulado:</span> <b class="mono" style="color:var(--tx)">${montoEn(cur, saldoDe(nb))}</b>
+      </div>
+      <div style="display:flex;justify-content:space-between;color:var(--tx2)">
+        <span>Saldo disponible propio:</span> <b class="mono" style="color:var(--tx)">${montoEn(cur, saldoPropio(nb))}</b>
+      </div>
+      <div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--line);display:flex;gap:6px">
+        <button type="button" class="chipbtn ${usaTotal?'on':''}" id="bsaModoTotal" style="flex:1;font-size:11.5px;padding:4px">Verificar Saldo Total</button>
+        <button type="button" class="chipbtn ${!usaTotal?'on':''}" id="bsaModoPropio" style="flex:1;font-size:11.5px;padding:4px">Verificar Disponible Propio</button>
+      </div>
+    </div>`;
+  }
+
+  h += `<div class="concil">
+      <div><span>${usaTotal?'Saldo total hoy':'Saldo hoy'}</span><b class="mono">${montoEn(cur,s)}</b></div>
       <div><span>Verificado</span><b class="mono">${
         sem.ver ? montoEn(cur, sem.ver.v) : '—'}</b></div>
       <div class="dif ${falta?'no':'si'}"><span>Diferencia</span><b class="mono">${
@@ -5767,17 +7378,30 @@ function bsaPintar(){
   }
   $('#bsaCuerpo').innerHTML = h;
 
+  const btnTot = $$real('#bsaModoTotal');
+  if (btnTot) btnTot.onclick = () => { BSA.propio = false; bsaPintar(); };
+  const btnProp = $$real('#bsaModoPropio');
+  if (btnProp) btnProp.onclick = () => { BSA.propio = true; bsaPintar(); };
+
   $('#bsaGuardarVer').onclick = async () => {
     const t = $('#bsaVer').value;
     if (t==='') { toast('Escribí un valor', true); return; }
-    VER[nb] = {v:+t||0, fecha:todayISO()};
-    await DB.put('ver', {b:nb, ...VER[nb]});
+    const clave = verClave(nb, esPropio);
+    VER[clave] = {v:+t||0, fecha:todayISO(), propio: esPropio};
+    await DB.put('ver', {b:clave, ...VER[clave]});
+    const act = actDeBolsa(nb);
+    if (act && !esPropio){
+      const valCOP = Math.round((+t||0) * trmDe(cur));
+      const rec = {id:uuid(), actId:act.id, fecha:todayISO(), valor:valCOP, nota:'sincronizado desde verificación de bolsa', ts:Date.now()};
+      VAL.push(rec); await DB.put('val', rec);
+    }
     bsaPintar(); renderSaldos(); autoSave();
-    const d = saldoPropio(nb) - VER[nb].v;
+    const d = s - VER[clave].v;
     toast(Math.abs(d)<1 ? nomB(nb)+' cuadra' : 'Diferencia de '+montoEn(cur,d), Math.abs(d)>=1);
   };
   $('#bsaBorrarVer').onclick = async () => {
-    delete VER[nb]; await DB.del('ver', nb);
+    const clave = verClave(nb, esPropio);
+    delete VER[clave]; await DB.del('ver', clave);
     bsaPintar(); renderSaldos(); autoSave(); toast('Verificación quitada');
   };
   const mm = $$real('#bsaModo');
@@ -5797,7 +7421,8 @@ function bsaPintar(){
 async function ajustar(){
   const nb = BSA.b, info = BOLSA[nb]||{};
   const cur = info.moneda || 'COP';
-  const sem = semaforo(nb);
+  const esPropio = !!BSA.propio;
+  const sem = semaforo(nb, esPropio);
   const dif = sem.dif;
   if (dif==null || Math.abs(dif)<1){ toast('No hay diferencia que ajustar', true); return; }
   const abs = Math.abs(dif), gasto = dif>0;
@@ -5816,10 +7441,12 @@ async function ajustar(){
       valor: Math.round(signed*trmDe(cur)), obs:'valorización a mercado', ts:Date.now() };
     MOV.push(m); await DB.put('mov', m);
     const act = await activoDeBolsa(nb);
-    const rec = {id:uuid(), actId:act.id, fecha:f,
-      valor: Math.round(sem.ver.v*trmDe(cur)),
-      nota:'valorización desde la bolsa', ts:Date.now()};
-    VAL.push(rec); await DB.put('val', rec);
+    if (act && act.id){
+      const rec = {id:uuid(), actId:act.id, fecha:f,
+        valor: Math.round(sem.ver.v*trmDe(cur)),
+        nota:'valorización desde la bolsa', ts:Date.now()};
+      VAL.push(rec); await DB.put('val', rec);
+    }
   } else if (BSA.modo==='bolsa'){
     const otra = BSA.contra;
     if (!otra){ toast('Elegí la otra bolsa', true); return; }
@@ -5841,14 +7468,25 @@ async function ajustar(){
     MOV.push(m); await DB.put('mov', m);
   }
   bsaPintar(); render(); autoSave();
-  const s2 = semaforo(nb);
+  const s2 = semaforo(nb, esPropio);
   toast(Math.abs(s2.dif) < 1 ? nomB(nb)+' quedó cuadrado' : 'Ajustado, revisá el saldo');
 }
 
 /* ---------- resumen de conciliación en la pantalla de Saldos ---------- */
 function renderConcil(){
-  const hojas = BOLSAS.filter(b=>!esPadre(b.b));
-  const est = hojas.map(b=>({b:b.b, ...semaforo(b.b)}));
+  const est = [];
+  BOLSAS.forEach(b => {
+    if (!esPadre(b.b)) {
+      est.push({ b: b.b, isPropio: false, ...semaforo(b.b, false) });
+    } else {
+      if (VER[b.b]) {
+        est.push({ b: b.b, isPropio: false, ...semaforo(b.b, false) });
+      }
+      if (VER[b.b + ':propio']) {
+        est.push({ b: b.b, isPropio: true, ...semaforo(b.b, true) });
+      }
+    }
+  });
   const mal  = est.filter(x=>x.st==='bad');
   const tibio= est.filter(x=>x.st==='warn' && !x.vieja);
   const viejas=est.filter(x=>x.vieja);
@@ -5866,8 +7504,8 @@ function renderConcil(){
 
   const fila = (x, tono) => {
     const cur = (BOLSA[x.b]||{}).moneda || 'COP';
-    return `<div class="cat-r" data-conc="${x.b}" style="cursor:pointer">
-      <span style="color:var(--tx)">${nomB(x.b)}</span>
+    return `<div class="cat-r" data-conc="${x.b}" ${x.isPropio ? 'data-conc-propio="true"' : ''} style="cursor:pointer">
+      <span style="color:var(--tx)">${nomB(x.b)}${x.isPropio ? ' (disponible propia)' : ''}</span>
       <b class="mono" style="color:var(--${tono})">${montoEn(cur, x.dif)}</b>
       <span style="flex:0 0 auto;color:var(--tx3);min-width:52px;text-align:right">ajustar ›</span>
     </div>`;
@@ -5889,9 +7527,128 @@ function renderConcil(){
   } else {
     h += `<p class="note" style="margin-top:10px">Tocá una para cerrar la diferencia.
       La tolerancia es mil pesos o medio por ciento del saldo, lo que sea mayor: debajo de
-      eso es redondeo.</p>`;
+      eso es redondeo.</p>
+      <button class="primary" id="btnConcilInspector" style="margin-top:12px;width:100%;font-weight:650">🔍 Inspeccionar / Modificar Registros en BD</button>`;
   }
   $('#slConcil').innerHTML = h;
+  const btnI = $$real('#btnConcilInspector');
+  if (btnI) btnI.onclick = abrirInspectorBD;
+}
+
+/* ---------- resumen de estado de presupuestos en la pantalla de Saldos ---------- */
+function renderPtoControl(){
+  const cont = $$real('#slPtoControl');
+  if (!cont) return;
+
+  const excedidos = [];
+  const porVencer = [];
+
+  for (const r of S.rubros){
+    if (!NAT_PTO.includes(r.nat)) continue;
+
+    if (r.nat === 'Evento'){
+      const s = sobreDe(r.n);
+      if (s.meta === 0 && s.ejec === 0) continue;
+
+      if (s.meta === 0 && s.ejec > 0){
+        excedidos.push({ rName: r.n, nat: 'Evento', p: 0, e: s.ejec, exc: s.ejec, sinPto: true, esSobre: true });
+      } else if (s.meta > 0 && s.ejec > s.meta){
+        excedidos.push({ rName: r.n, nat: 'Evento', p: s.meta, e: s.ejec, exc: s.ejec - s.meta, esSobre: true });
+      } else if (s.meta > 0 && s.ejec <= s.meta){
+        if (s.saldo < 0){
+          porVencer.push({ rName: r.n, nat: 'Evento', p: s.meta, e: s.ejec, disp: s.meta - s.ejec, adelantado: Math.abs(s.saldo), esSobre: true });
+        } else if (s.ejec >= 0.85 * s.meta){
+          porVencer.push({ rName: r.n, nat: 'Evento', p: s.meta, e: s.ejec, disp: s.meta - s.ejec, esSobre: true });
+        }
+      }
+    } else {
+      const e = estado(r.n, ym);
+      if (e.p === 0 && e.e === 0) continue;
+
+      if (e.p === 0 && e.e > 0){
+        excedidos.push({ rName: r.n, nat: r.nat, p: 0, e: e.e, exc: e.e, sinPto: true });
+      } else if (e.p > 0 && e.e > e.p){
+        excedidos.push({ rName: r.n, nat: r.nat, p: e.p, e: e.e, exc: e.e - e.p });
+      } else if (e.p > 0 && (e.e >= 0.85 * e.p || e.e > e.ritmo + 0.15 * e.p)){
+        porVencer.push({ rName: r.n, nat: r.nat, p: e.p, e: e.e, disp: e.disp });
+      }
+    }
+  }
+
+  excedidos.sort((a,b) => b.exc - a.exc);
+  porVencer.sort((a,b) => (b.adelantado || 0) - (a.adelantado || 0) || a.disp - b.disp);
+
+  const totalBad = excedidos.length;
+  const totalWarn = porVencer.length;
+
+  const sm = $$real('#slPtoSem');
+  if (sm){
+    if (totalBad > 0){
+      sm.className = 'sem bad';
+      sm.innerHTML = '<i></i>' + totalBad + ' excedido' + (totalBad === 1 ? '' : 's') + (totalWarn ? ' · ' + totalWarn + ' por vencer/adelantados' : '');
+    } else if (totalWarn > 0){
+      sm.className = 'sem warn';
+      sm.innerHTML = '<i></i>' + totalWarn + ' por vencer / adelantado' + (totalWarn === 1 ? '' : 's');
+    } else {
+      sm.className = 'sem ok';
+      sm.innerHTML = '<i></i>todo al día';
+    }
+  }
+
+  if (totalBad === 0 && totalWarn === 0){
+    cont.innerHTML = '<p class="note">Todos los rubros y sobres están dentro de su presupuesto en ' + ymLabel(ym) + '.</p>';
+    return;
+  }
+
+  let html = '';
+  if (excedidos.length > 0){
+    html += '<div style="font-size:11px;color:var(--bad);text-transform:uppercase;letter-spacing:.08em;font-weight:700;margin-bottom:8px">🛑 Excedidos de presupuesto (' + excedidos.length + ')</div>';
+    html += excedidos.map(x => {
+      const lbl = x.sinPto
+        ? `sin cuota asignada (${money(x.e)})`
+        : `excedido en ${money(x.exc)}`;
+      const ratio = x.p > 0 ? `${money(x.e)} / ${money(x.p)}` : `${money(x.e)} / $0`;
+      return `<div class="cat-r bad" data-reg="${x.rName}" style="cursor:pointer;padding:8px 10px;margin-bottom:6px;border-radius:8px">
+        <span style="color:var(--tx);font-weight:600">🛑 ${x.rName}${x.esSobre ? ' <em style="font-style:normal;font-size:10px;color:var(--tx3)">sobre</em>' : ''}</span>
+        <b class="mono" style="color:var(--bad)">${lbl}</b>
+        <span style="flex:0 0 auto;color:var(--tx3);font-size:11.5px;min-width:80px;text-align:right">${ratio}</span>
+      </div>`;
+    }).join('');
+  }
+
+  if (porVencer.length > 0){
+    html += '<div style="font-size:11px;color:var(--warn);text-transform:uppercase;letter-spacing:.08em;font-weight:700;margin:' + (excedidos.length ? '14px' : '0') + ' 0 8px">⚠️ Por vencer o adelantados (' + porVencer.length + ')</div>';
+    html += porVencer.map(x => {
+      let lbl, ratio;
+      if (x.esSobre){
+        if (x.adelantado){
+          lbl = `adelantado en ${money(x.adelantado)}`;
+        } else {
+          lbl = `quedan ${money(x.disp)}`;
+        }
+        ratio = `quedan ${money(x.disp)} de ${money(x.p)} meta`;
+      } else {
+        const pct = x.p > 0 ? (x.e / x.p * 100).toFixed(0) : 0;
+        lbl = `quedan ${money(x.disp)}`;
+        ratio = `${pct}% (${money(x.e)}/${money(x.p)})`;
+      }
+      return `<div class="cat-r warn" data-reg="${x.rName}" style="cursor:pointer;padding:8px 10px;margin-bottom:6px;border-radius:8px">
+        <span style="color:var(--tx);font-weight:550">⚠️ ${x.rName}${x.esSobre ? ' <em style="font-style:normal;font-size:10px;color:var(--tx3)">sobre</em>' : ''}</span>
+        <b class="mono" style="color:var(--warn)">${lbl}</b>
+        <span style="flex:0 0 auto;color:var(--tx3);font-size:11.5px;min-width:80px;text-align:right">${ratio}</span>
+      </div>`;
+    }).join('');
+  }
+
+  html += '<p class="note" style="margin-top:10px">Tocá cualquier rubro para registrar un movimiento.</p>';
+  cont.innerHTML = html;
+
+  cont.onclick = e => {
+    const btn = e.target.closest('[data-reg]');
+    if (btn && btn.dataset.reg){
+      openPad(btn.dataset.reg);
+    }
+  };
 }
 
 /* =================== navegación y render =================== */
@@ -5969,6 +7726,8 @@ $('#regGrid').onclick = e => {
   if (b){ $('#regBuscar').value=''; renderReg.q=''; openPad(b.dataset.r); }
 };
 $('#regUlt').onclick = async e => {
+  const editId = e.target.dataset.edit;
+  if (editId){ editarMov(editId); return; }
   const id = e.target.dataset.del; if(!id) return;
   const m = MOV.find(x=>x.id===id);
   if (!m) return;
@@ -5981,7 +7740,10 @@ $('#pad').onclick = e => {
   const k=e.target.dataset.k, b=e.target.dataset.b;
   if (k) key(k);
   if (b){ pad.bolsa=b; $$('#padBolsas .chipbtn').forEach(x=>
-    x.classList.toggle('on', x.dataset.b===b)); drawAmt(); }
+    x.classList.toggle('on', x.dataset.b===b));
+    const sel = $$real('#padBolsaDrop');
+    if (sel) sel.value = '';
+    drawAmt(); }
 };
 $('#padFechas').onclick = e => {
   const b=e.target.closest('[data-f]'); if(!b) return;
@@ -6019,6 +7781,7 @@ $('#hoRubros').onclick = e => {
   const b = e.target.closest('[data-reg],[data-ir]'); if(!b) return;
   if (b.dataset.reg) openPad(b.dataset.reg);
   else if (b.dataset.ir==='mover') abrirMov();
+  else if (b.dataset.ir==='nomina') wizNominaAbrir();
 };
 $('#nuevaVOk').onclick = () => {
   if (navigator.serviceWorker && navigator.serviceWorker.controller)
@@ -6046,9 +7809,30 @@ $('#hoVerTodos').onclick = e => { e.preventDefault();
 document.addEventListener('click', e => {
   const b = e.target.closest('#hoCards [data-ir], #hoAvisos [data-ir], #hoAccesos [data-ir]');
   if (!b) return;
-  view = b.dataset.ir; render();
+  if (b.dataset.ir === 'reg_pad'){
+    const r = b.dataset.rubro;
+    const m = +b.dataset.monto || 0;
+    if (r){
+      openPad(r);
+      if (m > 0) pad.v = m + '';
+      drawAmt();
+    }
+  } else {
+    view = b.dataset.ir; render();
+  }
 });
 $('#btnRecal').onclick = wizAbrir;
+if ($$real('#btnNomWiz')) $$real('#btnNomWiz').onclick = wizNominaAbrir;
+if ($$real('#btnNomGuardar')) $$real('#btnNomGuardar').onclick = cfgNominaGuardar;
+if ($$real('#wnSalir')) $$real('#wnSalir').onclick = wizNominaCerrar;
+if ($$real('#btnImpFacturas')) $$real('#btnImpFacturas').onclick = () => $('#fileFacturas').click();
+if ($$real('#fileFacturas')) $$real('#fileFacturas').onchange = e => {
+  const f = e.target.files[0]; if (!f) return;
+  const reader = new FileReader();
+  reader.onload = ev => importarFacturasJSON(ev.target.result);
+  reader.readAsText(f);
+  e.target.value = '';
+};
 $('#sList').onclick = e => { const b=e.target.closest('[data-sob]');
   if (b) editarVigencia(b.dataset.sob); };
 $$('.segrow .seg[data-pv]').forEach(b=>b.onclick = () => {
@@ -6073,6 +7857,23 @@ $('#bsaCerrar').onclick = cerrarBolsa;
 $('#slConcil').onclick = e => { const b=e.target.closest('[data-conc]');
   if (b) abrirBolsa(b.dataset.conc); };
 $('#slList').onclick = e => {
+  const concBtn = e.target.closest('[data-conc]');
+  if (concBtn){
+    e.stopPropagation();
+    abrirBolsa(concBtn.dataset.conc);
+    return;
+  }
+  const concProp = e.target.closest('[data-conc-propio]');
+  if (concProp){
+    e.stopPropagation();
+    abrirBolsaPropio(concProp.dataset.concPropio);
+    return;
+  }
+  const elPropio = e.target.closest('[data-b-propio]');
+  if (elPropio){
+    abrirBolsaPropio(elPropio.dataset.bPropio);
+    return;
+  }
   const el = e.target.closest('[data-b]'); if(!el) return;
   const b = el.dataset.b;
   if (hijos(b).length){
@@ -6084,13 +7885,16 @@ $$('#segAct .seg').forEach(b=>b.onclick = () => {
   $$('#segAct .seg').forEach(x=>x.classList.toggle('on', x===b));
   const v = b.dataset.av;
   $('#vSal').style.display = v==='sal' ? 'block' : 'none';
+  $('#vPre').style.display = v==='pre' ? 'block' : 'none';
   $('#vRen').style.display = v==='ren' ? 'block' : 'none';
   $('#vPen').style.display = v==='pen' ? 'block' : 'none';
-  $('#aComo').style.display = v==='pen' ? 'none' : 'block';
+  $('#aComo').style.display = (v==='pen' || v==='pre') ? 'none' : 'block';
   if (v==='pen') renderPen();
+  if (v==='pre') renderPre();
 });
 
 /* ---------- pensión: botones y listas ---------- */
+const blt = $$real('#btnLimpiarTrii'); if (blt) blt.onclick = limpiarDuplicadosTrii;
 $('#btnPreNuevo').onclick = () => preAbrir();
 $('#dvCancel').onclick = () => { $('#dvd').style.display='none'; };
 $('#dvOk').onclick = dvGuardar;
@@ -6191,6 +7995,10 @@ $('#btnTasas2').onclick = () => actualizarTasas();
 $('#btnDbRef').onclick = renderDb;
 $('#btnOdCon').onclick = odConectar;
 $('#btnOdSync').onclick = () => odSync();
+$('#btnOdReemplazar').onclick = reemplazarBaseOneDrive;
+$('#btnInspectorBD').onclick = abrirInspectorBD;
+$('#btnRepararConc').onclick = autoRepararConciliacion;
+$('#btnCalibrarPto').onclick = autoAjustarPresupuestosExcedidos;
 $('#btnOdOut').onclick = odDesconectar;
 $('#btnOdBase').onclick = async () => {
   try { await subirBase();
@@ -6207,12 +8015,24 @@ $('#fileIn').onchange = async e => {
   catch(err){ toast(err.message||'No se pudo leer el archivo', true); }
   e.target.value='';
 };
-$('#cfPto').onchange = async e => {
+$('#cfPto').oninput = async e => {
   const r = e.target.dataset.pto; if(!r) return;
   const k = r+'|'+ym, v = e.target.value===''? null : +e.target.value;
-  if (v===null){ delete PTO[k]; await DB.del('pto',k); }
-  else { PTO[k]=v; await DB.put('pto',{k, v, ts:Date.now()}); }
-  toast('Presupuesto de '+r+' actualizado'); autoSave();
+  if (v===null){ delete PTO[k]; delete PTO_TS[k]; await DB.del('pto',k); }
+  else { const ts=Date.now(); PTO[k]=v; PTO_TS[k]=ts; await DB.put('pto',{k, v, ts}); }
+  clearTimeout(e.target._t);
+  e.target._t = setTimeout(()=>{ toast('Presupuesto de '+r+' actualizado'); autoSave(); }, 600);
+};
+$('#cfPto').onchange = async e => {
+  const r = e.target.dataset.nat; if(!r) return;
+  const nat = e.target.value;
+  if (!RB[r]) return;
+  RB[r].nat = nat;
+  const ed = {...(CFG.rubrosNatEdit||{})};
+  ed[r] = nat;
+  await setCfg('rubrosNatEdit', ed);
+  render(); autoSave();
+  toast(r+' ahora es '+nat);
 };
 $('#nrCat').onchange = async e => {
   if (e.target.value !== '__nueva__') return;
@@ -6248,6 +8068,7 @@ $('#hTipo').onchange = e => { HFIL.tipo=e.target.value; HLIM=60; renderHist(); }
 $('#hD1').onchange = e => { HFIL.d1=e.target.value; HFIL.rango='libre'; HLIM=60; renderHist(); };
 $('#hD2').onchange = e => { HFIL.d2=e.target.value; HFIL.rango='libre'; HLIM=60; renderHist(); };
 $('#hMasFilas').onclick = () => { HLIM+=120; renderHist(); };
+$('#hLista').onclick = e => { const b=e.target.closest('[data-editmov]'); if (b) editarMov(b.dataset.editmov); };
 $('#hCSV').onclick = exportarHist;
 $('#hCSVp').onclick = exportarPivot;
 $('#hCSVt').onclick = exportarTodo;
@@ -6311,6 +8132,7 @@ document.addEventListener('keydown', e => {
     return;
   }
   if (/^[0-9]$/.test(e.key)) key(e.key);
+  else if (e.key==='-' || e.key==='_') key('±');
   else if (e.key==='Backspace') key('del');
   else if (e.key==='Enter') guardar();
   else if (e.key==='Escape') closePad();
@@ -6337,6 +8159,12 @@ async function boot(){
     try { if (r && r.n && !RB[r.n]){ S.rubros.unshift(r); RB[r.n]=r; } }
     catch(e){ console.error('rubro extra inválido', r, e); }
   }
+  /* aplicar ediciones de naturaleza (local por dispositivo) */
+  if (hayDatos() && CFG.rubrosNatEdit){
+    for (const [n, nat] of Object.entries(CFG.rubrosNatEdit)){
+      if (RB[n] && (NAT_PTO.includes(nat) || nat === 'Ingreso')) RB[n].nat = nat;
+    }
+  }
   MOV = await DB.all('mov');
   /* activos: la semilla se carga una vez; después manda lo que hay en la base */
   ACT = await DB.all('act'); FLU = await DB.all('flu'); VAL = await DB.all('val');
@@ -6349,9 +8177,17 @@ async function boot(){
     for (const x of FLU) await DB.put('flu', x);
     for (const x of VAL) await DB.put('val', x);
   }
-  (await DB.all('pto')).forEach(p=>PTO[p.k]=p.v);
+  (await DB.all('pto')).forEach(p=>{ PTO[p.k]=p.v; PTO_TS[p.k]=p.ts||0; });
   OBJ = await DB.all('obj');
-  (await DB.all('ver')).forEach(v=>VER[v.b]={v:v.v, fecha:v.fecha});
+  (await DB.all('ver')).forEach(v => {
+    let key = v.b;
+    if (v.propio && esPadre(v.b) && !v.b.endsWith(':propio')) {
+      key = v.b + ':propio';
+      DB.del('ver', v.b);
+      DB.put('ver', { b: key, v: v.v, fecha: v.fecha, propio: true });
+    }
+    VER[key] = { v: v.v, fecha: v.fecha, propio: !!v.propio };
+  });
   const fh = await DB.get('fs','handle');
   if (fh && fh.v){ try {
     if (await fh.v.queryPermission({mode:'readwrite'})==='granted') FH=fh.v;
@@ -6411,19 +8247,36 @@ async function boot(){
   if (navigator.storage && navigator.storage.persist)
     navigator.storage.persisted().then(p => { if (!p) navigator.storage.persist().catch(()=>{}); }).catch(()=>{});
   if ('serviceWorker' in navigator){
-    navigator.serviceWorker.register('sw.js').then(reg=>{
-      /* si aparece una versión nueva mientras la app está abierta, avisar */
+    let refreshing = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (!refreshing) { refreshing = true; window.location.reload(); }
+    });
+    navigator.serviceWorker.register('sw.js?v=27').then(reg=>{
       reg.addEventListener('updatefound', ()=>{
         const nuevo = reg.installing;
         if (!nuevo) return;
         nuevo.addEventListener('statechange', ()=>{
-          if (nuevo.state==='installed' && navigator.serviceWorker.controller)
-            $('#nuevaV').style.display='block';
+          if (nuevo.state==='installed' && navigator.serviceWorker.controller){
+            nuevo.postMessage('actualizar');
+          }
         });
       });
       reg.update().catch(()=>{});
     }).catch(()=>{});
   }
+}
+
+async function desinstalarSW(){
+  if (!confirm('¿Deseas desinstalar la memoria caché y forzar la descarga de la última versión?')) return;
+  if ('serviceWorker' in navigator){
+    const regs = await navigator.serviceWorker.getRegistrations();
+    for (const r of regs) await r.unregister();
+  }
+  if ('caches' in window){
+    const keys = await caches.keys();
+    for (const k of keys) await caches.delete(k);
+  }
+  window.location.href = window.location.origin + window.location.pathname + '?v=' + Date.now();
 }
 boot();
 </script>
