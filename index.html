@@ -4800,7 +4800,11 @@ async function fusionar(data, silencio){
   for (const v of (data.ver||[])) {
     let key = v.b;
     if (v.propio && esPadre(v.b) && !v.b.endsWith(':propio')) key = v.b + ':propio';
-    if (!VER[key]){ VER[key]={v:v.v,fecha:v.fecha,propio:v.propio}; await DB.put('ver',{...v,b:key}); }
+    const cur = VER[key];
+    if (!cur || (v.fecha && (!cur.fecha || v.fecha >= cur.fecha))){
+      VER[key] = { v: v.v, fecha: v.fecha, propio: !!v.propio };
+      await DB.put('ver', { b: key, ...VER[key] });
+    }
   }
   for (const [store, arr, cur] of [['act',data.act,ACT],['flu',data.flu,FLU],
                                    ['val',data.val,VAL],['pen',data.pen,PEN]]){
@@ -5481,7 +5485,7 @@ async function odSync(silencio){
   } catch(e){
     ODT.err = e.message || String(e);
     if (!silencio) toast('OneDrive: '+ODT.err, true);
-  } finally { odEnCurso = false; renderOd(); }
+  } finally { odEnCurso = false; renderOd(); if (typeof render==='function') render(); }
 }
 
 /* rebote: sincroniza 4 s después del último cambio, no en cada tecla */
