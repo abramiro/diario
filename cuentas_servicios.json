@@ -1,0 +1,29 @@
+{
+  "onedrive_path": "~/OneDrive/Diario/facturas-servicios.json",
+  "servicios": [
+    {
+      "empresa": "Claro Colombia",
+      "rubro": "Serv. Claro fijo",
+      "cuenta": "78352391",
+      "metodo": "claro"
+    },
+    {
+      "empresa": "EAAB Acueducto Bogotá",
+      "rubro": "Servicio Agua",
+      "nic": "13512115",
+      "metodo": "eaab"
+    },
+    {
+      "empresa": "Enel Colombia",
+      "rubro": "Energía",
+      "cuenta": "90042081",
+      "metodo": "enel"
+    },
+    {
+      "empresa": "Grupo Vanti Gas",
+      "rubro": "Gas Natural",
+      "cuenta": "12345678",
+      "metodo": "vanti"
+    }
+  ]
+}
