@@ -1587,7 +1587,7 @@ input[type=text],input[type=number],input[type=date],select{
 <div id="toast"></div>
 <script>
 'use strict';
-const VERSION = '2026.08.06-02';   /* subí esto en cada cambio publicado */
+const VERSION = '2026.08.06-04';   /* subí esto en cada cambio publicado */
 /* ===================================================================
    Diario · Presupuesto — PWA local-first
    Los datos viven en IndexedDB en este dispositivo. Nada sale de acá
@@ -4789,6 +4789,7 @@ async function fusionar(data, silencio){
     if (!mio){ MOV.push(m); await DB.put('mov',m); add++; if (m.borrado) bajas++; continue; }
     /* una baja gana siempre: si cualquiera de los dos lados lo borró, queda borrado */
     if (m.borrado && !mio.borrado){ mio.borrado = m.borrado; await DB.put('mov', mio); bajas++; }
+    else if ((m.ts||0) > (mio.ts||0)){ Object.assign(mio, m); await DB.put('mov', mio); }
   }
   for (const p of (data.pto||[])){
     if (p.v==null) continue;
@@ -4821,12 +4822,8 @@ async function fusionar(data, silencio){
       if (!mio){ cur.push(x); await DB.put(store,x); }
       else {
         if (x.borrado && !mio.borrado){ mio.borrado = x.borrado; await DB.put(store,mio); }
-        else if (store === 'act'){
-          const fRem = x.valFecha || x.fecha || '';
-          const fLoc = mio.valFecha || mio.fecha || '';
-          if (fRem >= fLoc || (x.ts||0) > (mio.ts||0)){
-            Object.assign(mio, x); await DB.put(store, mio);
-          }
+        else if ((x.ts||0) > (mio.ts||0) || (store==='act' && (x.valFecha||'') >= (mio.valFecha||''))){
+          Object.assign(mio, x); await DB.put(store, mio);
         }
       }
     }
@@ -5491,7 +5488,8 @@ const odActivo = () => !!(ODT.access || ODT.refresh);
 /* --- lectura y escritura del archivo --- */
 async function odLeer(){
   const t = await odToken();
-  const r = await fetch(OD.api+':/content', {headers:{Authorization:'Bearer '+t}});
+  const url = OD.api + ':/content?_t=' + Date.now();
+  const r = await fetch(url, {headers:{Authorization:'Bearer '+t}, cache:'no-cache'});
   if (r.status===404) return null;          /* primera vez: aún no existe */
   if (!r.ok) throw new Error('no se pudo leer ('+r.status+')');
   return await r.json();
@@ -5528,7 +5526,13 @@ async function odSync(silencio){
   } catch(e){
     ODT.err = e.message || String(e);
     if (!silencio) toast('OneDrive: '+ODT.err, true);
-  } finally { odEnCurso = false; renderOd(); if (typeof render==='function') render(); }
+  } finally {
+    odEnCurso = false;
+    renderOd();
+    armarBolsas();
+    if (typeof renderSaldos==='function') renderSaldos();
+    if (typeof render==='function') render();
+  }
 }
 
 /* rebote: sincroniza 4 s después del último cambio, no en cada tecla */
@@ -5906,12 +5910,12 @@ function deltaLocal(nb, hasta){
 
 /* el saldo de una cuenta con bolsillos es la suma de sus bolsillos */
 const saldoPropio = (nb, hasta) => (BOLSA[nb] ? BOLSA[nb].saldo : 0) + deltaLocal(nb, hasta);
-const saldoDe = nb => {
+const saldoDe = (nb, hasta) => {
   const hs = hijos(nb);
   /* si tiene bolsillos, el saldo del padre es su propio saldo (plata sin
      asignar a ningún bolsillo) más la suma de los hijos */
-  if (hs.length) return saldoPropio(nb) + hs.reduce((s,h) => s + saldoPropio(h.b), 0);
-  return saldoPropio(nb);
+  if (hs.length) return saldoPropio(nb, hasta) + hs.reduce((s,h) => s + saldoPropio(h.b, hasta), 0);
+  return saldoPropio(nb, hasta);
 };
 const enPesos = (nb, s) => {
   const c = BOLSA[nb] ? BOLSA[nb].moneda : 'COP';
