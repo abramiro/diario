@@ -4812,8 +4812,16 @@ async function fusionar(data, silencio){
     for (const x of (arr||[])){
       const mio = ids.get(x.id);
       if (!mio){ cur.push(x); await DB.put(store,x); }
-      /* si el remoto tiene borrado y el local no, propagar la baja */
-      else if (x.borrado && !mio.borrado){ mio.borrado = x.borrado; await DB.put(store,mio); }
+      else {
+        if (x.borrado && !mio.borrado){ mio.borrado = x.borrado; await DB.put(store,mio); }
+        else if (store === 'act'){
+          const fRem = x.valFecha || x.fecha || '';
+          const fLoc = mio.valFecha || mio.fecha || '';
+          if (fRem >= fLoc || (x.ts||0) > (mio.ts||0)){
+            Object.assign(mio, x); await DB.put(store, mio);
+          }
+        }
+      }
     }
   }
   /* préstamos: como los objetivos, gana el que se editó más recientemente */
