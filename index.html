@@ -6247,7 +6247,7 @@ function universo(){
     v:m.valor, o:m.obs||'', i:(RB[m.r]||{}).nat==='Ingreso'?1:0,
     m:m.moneda||'COP', vo:m.valorOrig!=null?m.valorOrig:m.valor, src:'app'}));
   const tras = (HFIL.tipo==='todo'||HFIL.tipo==='traslado') ? MOV.filter(m=>vivo(m) && m.tipo==='traslado').map(m=>({
-    id:m.id, f:m.fecha, r:'⇄ '+nomB(m.de)+' → '+nomB(m.a), c:'Traslado', b:nomB(m.de),
+    id:m.id, f:m.fecha, r:'⇄ '+nomB(m.de)+' → '+nomB(m.a), c:'Traslado', b:m.de, de:m.de, a:m.a,
     v:m.valor, o:m.obs||'', i:0, m:'COP', vo:m.valor, src:'app'})) : [];
   return [...(HIST||[]), ...loc, ...tras];
 }
@@ -6275,7 +6275,7 @@ function filtrar(){
     if (HFIL.tipo==='traslado' && !traslado) return false;
     if (HFIL.cat && m.c !== HFIL.cat) return false;
     if (HFIL.rub && m.r !== HFIL.rub) return false;
-    if (HFIL.bol && m.b !== HFIL.bol) return false;
+    if (HFIL.bol && m.b !== HFIL.bol && m.de !== HFIL.bol && m.a !== HFIL.bol) return false;
     if (q && !(sinTilde(m.r).includes(q) || sinTilde(m.b).includes(q)
             || sinTilde(m.o).includes(q) || sinTilde(m.c).includes(q))) return false;
     return true;
@@ -7151,10 +7151,12 @@ async function ajustar(){
       valor: Math.round(signed*trmDe(cur)), obs:'valorización a mercado', ts:Date.now() };
     MOV.push(m); await DB.put('mov', m);
     const act = await activoDeBolsa(nb);
-    const rec = {id:uuid(), actId:act.id, fecha:f,
-      valor: Math.round(sem.ver.v*trmDe(cur)),
-      nota:'valorización desde la bolsa', ts:Date.now()};
-    VAL.push(rec); await DB.put('val', rec);
+    if (act && act.id){
+      const rec = {id:uuid(), actId:act.id, fecha:f,
+        valor: Math.round(sem.ver.v*trmDe(cur)),
+        nota:'valorización desde la bolsa', ts:Date.now()};
+      VAL.push(rec); await DB.put('val', rec);
+    }
   } else if (BSA.modo==='bolsa'){
     const otra = BSA.contra;
     if (!otra){ toast('Elegí la otra bolsa', true); return; }
