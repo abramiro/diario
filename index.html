@@ -1587,7 +1587,7 @@ input[type=text],input[type=number],input[type=date],select{
 <div id="toast"></div>
 <script>
 'use strict';
-const VERSION = '2026.08.02-04';   /* subí esto en cada cambio publicado */
+const VERSION = '2026.08.06-02';   /* subí esto en cada cambio publicado */
 /* ===================================================================
    Diario · Presupuesto — PWA local-first
    Los datos viven en IndexedDB en este dispositivo. Nada sale de acá
@@ -4726,7 +4726,14 @@ function snapshot(){
   return { v:1, app:'diario-presupuesto', exportedAt:new Date().toISOString(),
     mov:MOV, pto:Object.entries(PTO).map(([k,v])=>({k,v,ts:PTO_TS[k]||0})), obj:OBJ,
     act:ACT, flu:FLU, val:VAL, pen:PEN, pre:PRE,
-    ver:Object.entries(VER).map(([b,x])=>({b,...x})) };
+    ver:Object.entries(VER).map(([b,x])=>({b,...x})),
+    cfg:{
+      bolsasEdit: CFG.bolsasEdit || {},
+      bolsasExtra: CFG.bolsasExtra || [],
+      rubrosExtra: CFG.rubrosExtra || [],
+      rubrosNatEdit: CFG.rubrosNatEdit || {}
+    }
+  };
 }
 async function exportar(){
   const blob = new Blob([JSON.stringify(snapshot())],{type:'application/json'});
@@ -4829,6 +4836,34 @@ async function fusionar(data, silencio){
     const cur = PRE.find(x=>x.id===p.id);
     if (!cur){ PRE.push(p); await DB.put('pre',p); }
     else if ((p.ts||0) > (cur.ts||0)){ Object.assign(cur,p); await DB.put('pre',cur); }
+  }
+  if (data.cfg){
+    let cambioCfg = false;
+    if (data.cfg.bolsasEdit){
+      const ed = {...(CFG.bolsasEdit||{}), ...data.cfg.bolsasEdit};
+      await setCfg('bolsasEdit', ed); cambioCfg = true;
+    }
+    if (data.cfg.bolsasExtra){
+      const ids = new Set((CFG.bolsasExtra||[]).map(b=>b.b));
+      let ed = [...(CFG.bolsasExtra||[])];
+      for (const b of data.cfg.bolsasExtra){
+        if (!ids.has(b.b)){ ed.push(b); cambioCfg = true; }
+      }
+      if (cambioCfg) await setCfg('bolsasExtra', ed);
+    }
+    if (data.cfg.rubrosExtra){
+      const ids = new Set((CFG.rubrosExtra||[]).map(r=>r.n));
+      let ed = [...(CFG.rubrosExtra||[])];
+      for (const r of data.cfg.rubrosExtra){
+        if (!ids.has(r.n)){ ed.push(r); cambioCfg = true; }
+      }
+      if (cambioCfg) await setCfg('rubrosExtra', ed);
+    }
+    if (data.cfg.rubrosNatEdit){
+      const ed = {...(CFG.rubrosNatEdit||{}), ...data.cfg.rubrosNatEdit};
+      await setCfg('rubrosNatEdit', ed); cambioCfg = true;
+    }
+    if (cambioCfg) armarBolsas();
   }
   render();
   if (!silencio) toast('Fusionado: '+add+' nuevos'+(bajas?', '+bajas+' de baja':''));
