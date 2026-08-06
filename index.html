@@ -4797,7 +4797,11 @@ async function fusionar(data, silencio){
     else { const cur=OBJ.find(x=>x.id===o.id);
       if ((o.ts||0) > (cur.ts||0)){ Object.assign(cur,o); await DB.put('obj',cur); } }
   }
-  for (const v of (data.ver||[])) if (!VER[v.b]){ VER[v.b]={v:v.v,fecha:v.fecha}; await DB.put('ver',v); }
+  for (const v of (data.ver||[])) {
+    let key = v.b;
+    if (v.propio && esPadre(v.b) && !v.b.endsWith(':propio')) key = v.b + ':propio';
+    if (!VER[key]){ VER[key]={v:v.v,fecha:v.fecha,propio:v.propio}; await DB.put('ver',{...v,b:key}); }
+  }
   for (const [store, arr, cur] of [['act',data.act,ACT],['flu',data.flu,FLU],
                                    ['val',data.val,VAL],['pen',data.pen,PEN]]){
     const ids = new Map(cur.map(x=>[x.id,x]));
@@ -6919,18 +6923,22 @@ function renderHome(){
 function tolerancia(saldo){
   return Math.max(1000, Math.abs(saldo)*0.005);
 }
+function verClave(nb, forcePropio){
+  return (forcePropio && esPadre(nb)) ? (nb + ':propio') : nb;
+}
 function semaforo(nb, forcePropio){
-  const v = VER[nb];
+  const clave = verClave(nb, forcePropio);
+  const v = VER[clave];
   if (!v) return {st:'gris', et:'sin verificar', dif:null};
   const hs = hijos(nb);
-  const esProp = forcePropio || v.propio;
+  const esProp = !!forcePropio;
   const usaTotal = hs.length > 0 && !esProp;
   const alDia = usaTotal ? saldoDe(nb, v.fecha) : saldoPropio(nb, v.fecha);
   const dif = alDia - v.v, tol = tolerancia(v.v);
   const dias = Math.round((Date.now() - new Date(v.fecha+'T12:00'))/864e5);
   const curS = usaTotal ? saldoDe(nb) : saldoPropio(nb);
   const post = curS - alDia;
-  const base = {dif, ver:v, alDia, dias, post, usaTotal};
+  const base = {dif, ver:v, alDia, dias, post, usaTotal, clave};
   if (Math.abs(dif) >= 1 && Math.abs(dif) > tol) return {...base, st:'bad', et:'no cuadra'};
   if (Math.abs(dif) >= 1)                        return {...base, st:'warn', et:'diferencia menor'};
   if (dias > 35) return {...base, st:'warn', et:'conviene reverificar', vieja:true};
@@ -6965,7 +6973,8 @@ function bsaPintar(){
   const nb = BSA.b, info = BOLSA[nb]||{};
   const cur = info.moneda || 'COP';
   const hs = hijos(nb);
-  const esPropio = BSA.propio || (hs.length > 0 && VER[nb] && VER[nb].propio);
+  const esPropio = !!BSA.propio;
+  const clave = verClave(nb, esPropio);
   const usaTotal = hs.length > 0 && !esPropio;
   const s = usaTotal ? saldoDe(nb) : saldoPropio(nb);
   const sem = semaforo(nb, esPropio);
@@ -7083,20 +7092,22 @@ function bsaPintar(){
   $('#bsaGuardarVer').onclick = async () => {
     const t = $('#bsaVer').value;
     if (t==='') { toast('Escribí un valor', true); return; }
-    VER[nb] = {v:+t||0, fecha:todayISO(), propio: usaTotal ? false : true};
-    await DB.put('ver', {b:nb, ...VER[nb]});
+    const clave = verClave(nb, esPropio);
+    VER[clave] = {v:+t||0, fecha:todayISO(), propio: esPropio};
+    await DB.put('ver', {b:clave, ...VER[clave]});
     const act = actDeBolsa(nb);
-    if (act){
+    if (act && !esPropio){
       const valCOP = Math.round((+t||0) * trmDe(cur));
       const rec = {id:uuid(), actId:act.id, fecha:todayISO(), valor:valCOP, nota:'sincronizado desde verificación de bolsa', ts:Date.now()};
       VAL.push(rec); await DB.put('val', rec);
     }
     bsaPintar(); renderSaldos(); autoSave();
-    const d = s - VER[nb].v;
+    const d = s - VER[clave].v;
     toast(Math.abs(d)<1 ? nomB(nb)+' cuadra' : 'Diferencia de '+montoEn(cur,d), Math.abs(d)>=1);
   };
   $('#bsaBorrarVer').onclick = async () => {
-    delete VER[nb]; await DB.del('ver', nb);
+    const clave = verClave(nb, esPropio);
+    delete VER[clave]; await DB.del('ver', clave);
     bsaPintar(); renderSaldos(); autoSave(); toast('Verificación quitada');
   };
   const mm = $$real('#bsaModo');
@@ -7116,7 +7127,8 @@ function bsaPintar(){
 async function ajustar(){
   const nb = BSA.b, info = BOLSA[nb]||{};
   const cur = info.moneda || 'COP';
-  const sem = semaforo(nb);
+  const esPropio = !!BSA.propio;
+  const sem = semaforo(nb, esPropio);
   const dif = sem.dif;
   if (dif==null || Math.abs(dif)<1){ toast('No hay diferencia que ajustar', true); return; }
   const abs = Math.abs(dif), gasto = dif>0;
@@ -7160,14 +7172,25 @@ async function ajustar(){
     MOV.push(m); await DB.put('mov', m);
   }
   bsaPintar(); render(); autoSave();
-  const s2 = semaforo(nb);
+  const s2 = semaforo(nb, esPropio);
   toast(Math.abs(s2.dif) < 1 ? nomB(nb)+' quedó cuadrado' : 'Ajustado, revisá el saldo');
 }
 
 /* ---------- resumen de conciliación en la pantalla de Saldos ---------- */
 function renderConcil(){
-  const hojas = BOLSAS.filter(b=>!esPadre(b.b) || VER[b.b]);
-  const est = hojas.map(b=>({b:b.b, ...semaforo(b.b)}));
+  const est = [];
+  BOLSAS.forEach(b => {
+    if (!esPadre(b.b)) {
+      est.push({ b: b.b, isPropio: false, ...semaforo(b.b, false) });
+    } else {
+      if (VER[b.b]) {
+        est.push({ b: b.b, isPropio: false, ...semaforo(b.b, false) });
+      }
+      if (VER[b.b + ':propio']) {
+        est.push({ b: b.b, isPropio: true, ...semaforo(b.b, true) });
+      }
+    }
+  });
   const mal  = est.filter(x=>x.st==='bad');
   const tibio= est.filter(x=>x.st==='warn' && !x.vieja);
   const viejas=est.filter(x=>x.vieja);
@@ -7185,8 +7208,8 @@ function renderConcil(){
 
   const fila = (x, tono) => {
     const cur = (BOLSA[x.b]||{}).moneda || 'COP';
-    return `<div class="cat-r" data-conc="${x.b}" style="cursor:pointer">
-      <span style="color:var(--tx)">${nomB(x.b)}</span>
+    return `<div class="cat-r" data-conc="${x.b}" ${x.isPropio ? 'data-conc-propio="true"' : ''} style="cursor:pointer">
+      <span style="color:var(--tx)">${nomB(x.b)}${x.isPropio ? ' (disponible propia)' : ''}</span>
       <b class="mono" style="color:var(--${tono})">${montoEn(cur, x.dif)}</b>
       <span style="flex:0 0 auto;color:var(--tx3);min-width:52px;text-align:right">ajustar ›</span>
     </div>`;
@@ -7853,7 +7876,15 @@ async function boot(){
   }
   (await DB.all('pto')).forEach(p=>{ PTO[p.k]=p.v; PTO_TS[p.k]=p.ts||0; });
   OBJ = await DB.all('obj');
-  (await DB.all('ver')).forEach(v=>VER[v.b]={v:v.v, fecha:v.fecha});
+  (await DB.all('ver')).forEach(v => {
+    let key = v.b;
+    if (v.propio && esPadre(v.b) && !v.b.endsWith(':propio')) {
+      key = v.b + ':propio';
+      DB.del('ver', v.b);
+      DB.put('ver', { b: key, v: v.v, fecha: v.fecha, propio: true });
+    }
+    VER[key] = { v: v.v, fecha: v.fecha, propio: !!v.propio };
+  });
   const fh = await DB.get('fs','handle');
   if (fh && fh.v){ try {
     if (await fh.v.queryPermission({mode:'readwrite'})==='granted') FH=fh.v;
