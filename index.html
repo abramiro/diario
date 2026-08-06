@@ -1211,9 +1211,12 @@ input[type=text],input[type=number],input[type=date],select{
     <button class="primary gray" id="btnRepararConc" style="margin-bottom:8px">Limpiar descuadres de conciliación (bolsas en rojo)</button>
     <button class="primary gray" id="btnCalibrarPto" style="margin-bottom:8px">Asignar cuotas a presupuestos excedidos</button>
   </div>
+
+  <div class="card">
     <h3>Presupuesto del mes</h3>
     <p class="note" style="margin-bottom:10px">Editá los montos del mes visible. Vacío = usar el valor calibrado.</p>
     <div id="cfPto"></div>
+  </div>
   </div>
 
   <div class="card">
@@ -1594,7 +1597,7 @@ input[type=text],input[type=number],input[type=date],select{
 <div id="toast"></div>
 <script>
 'use strict';
-const VERSION = '2026.08.06-07';   /* subí esto en cada cambio publicado */
+const VERSION = '2026.08.06-08';   /* subí esto en cada cambio publicado */
 /* ===================================================================
    Diario · Presupuesto — PWA local-first
    Los datos viven en IndexedDB en este dispositivo. Nada sale de acá
@@ -7515,9 +7518,12 @@ function renderConcil(){
   } else {
     h += `<p class="note" style="margin-top:10px">Tocá una para cerrar la diferencia.
       La tolerancia es mil pesos o medio por ciento del saldo, lo que sea mayor: debajo de
-      eso es redondeo.</p>`;
+      eso es redondeo.</p>
+      <button class="primary" id="btnConcilInspector" style="margin-top:12px;width:100%;font-weight:650">🔍 Inspeccionar / Modificar Registros en BD</button>`;
   }
   $('#slConcil').innerHTML = h;
+  const btnI = $$real('#btnConcilInspector');
+  if (btnI) btnI.onclick = abrirInspectorBD;
 }
 
 /* ---------- resumen de estado de presupuestos en la pantalla de Saldos ---------- */
