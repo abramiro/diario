@@ -7636,9 +7636,9 @@ function abrirInspectorBD(bolsaInicial){
             <td class="mono"><b>${montoEn(cur, saldoFinal)}</b></td></tr>
         ${ver ? `<tr><td>Saldo verificado (${fCorta(ver.fecha)})</td>
             <td class="mono">${montoEn(cur, ver.v)}</td></tr>
-        <tr class="tot"><td style="color:${Math.abs(difVer)<1?'var(--ok)':'var(--bad)}">
+        <tr class="tot"><td style="color:${Math.abs(difVer)<1?'var(--ok)':'var(--bad)'}">
             <b>${Math.abs(difVer)<1?'✓ Cuadra':'❌ Descuadre'}</b></td>
-            <td class="mono" style="color:${Math.abs(difVer)<1?'var(--ok)':'var(--bad)}">
+            <td class="mono" style="color:${Math.abs(difVer)<1?'var(--ok)':'var(--bad)'}">
             <b>${montoEn(cur, difVer)}</b></td></tr>` : ''}
       </table>
     </div>`;
