@@ -1205,6 +1205,12 @@ input[type=text],input[type=number],input[type=date],select{
   </div>
 
   <div class="card">
+    <h3 style="margin:0 0 10px">Inspección y Reparación de BD</h3>
+    <p class="note" style="margin-bottom:12px">Herramientas directas para inspeccionar la base de datos local (VER y PTO), modificar verificaciones y corregir descuadres:</p>
+    <button class="primary" id="btnInspectorBD" style="margin-bottom:8px">Inspeccionar registros en BD (Detalle de descuadres)</button>
+    <button class="primary gray" id="btnRepararConc" style="margin-bottom:8px">Limpiar descuadres de conciliación (bolsas en rojo)</button>
+    <button class="primary gray" id="btnCalibrarPto" style="margin-bottom:8px">Asignar cuotas a presupuestos excedidos</button>
+  </div>
     <h3>Presupuesto del mes</h3>
     <p class="note" style="margin-bottom:10px">Editá los montos del mes visible. Vacío = usar el valor calibrado.</p>
     <div id="cfPto"></div>
@@ -1588,7 +1594,7 @@ input[type=text],input[type=number],input[type=date],select{
 <div id="toast"></div>
 <script>
 'use strict';
-const VERSION = '2026.08.06-05';   /* subí esto en cada cambio publicado */
+const VERSION = '2026.08.06-07';   /* subí esto en cada cambio publicado */
 /* ===================================================================
    Diario · Presupuesto — PWA local-first
    Los datos viven en IndexedDB en este dispositivo. Nada sale de acá
@@ -4937,6 +4943,161 @@ async function reemplazarBaseOneDrive(){
     toast('Error al leer de OneDrive: ' + e.message, true);
   }
 }
+
+async function autoRepararConciliacion(){
+  let count = 0;
+  for (const k of Object.keys(VER)){
+    const baseBolsa = k.replace(':propio', '');
+    const sem = semaforo(baseBolsa, k.endsWith(':propio'));
+    if (sem.st === 'bad' || sem.st === 'warn'){
+      delete VER[k];
+      await DB.del('ver', k);
+      count++;
+    }
+  }
+  armarBolsas();
+  if (typeof renderSaldos==='function') renderSaldos();
+  render();
+  if (odActivo()) await odSync();
+  toast('Conciliación reparada: '+count+' verificaciones con diferencia removidas.');
+}
+
+async function autoAjustarPresupuestosExcedidos(){
+  const y = ym || ymOf(new Date());
+  let count = 0;
+  if (!S || !S.rubros) return;
+  for (const r of S.rubros){
+    const st = estado(r.n, y);
+    if (st.st === 'bad' || (st.p === 0 && st.e > 0)){
+      const cuota = Math.ceil(st.e / 1000) * 1000;
+      const k = r.n + '|' + y;
+      PTO[k] = cuota;
+      PTO_TS[k] = Date.now();
+      await DB.put('pto', {k, v:cuota, ts:PTO_TS[k]});
+      count++;
+    }
+  }
+  render();
+  if (odActivo()) await odSync();
+  toast('Presupuestos ajustados: '+count+' cuotas asignadas.');
+}
+
+function abrirInspectorBD(){
+  let h = `<div style="max-width:680px;margin:0 auto">
+    <div class="f" style="margin-bottom:14px">
+      <h2 style="flex:1;margin:0">Inspección de BD · Descuadres y Registros</h2>
+      <button class="chipbtn" onclick="closePop()">✕ Cerrar</button>
+    </div>
+    <p class="note" style="margin-bottom:16px">Detalle exacto de las verificaciones y presupuestos en IndexedDB (<span class="mono">VER</span> y <span class="mono">PTO</span>):</p>`;
+
+  /* 1. Bolsas */
+  h += `<h4 style="margin:14px 0 8px">1. Bolsas con Descuadre de Conciliación</h4>`;
+  let countB = 0;
+  for (const b of BOLSAS){
+    const sem = semaforo(b.b, false);
+    const semP = semaforoPropio(b.b);
+    const items = [];
+    if (sem.st==='bad' || sem.st==='warn') items.push({key:b.b, sem, propio:false});
+    if (esPadre(b.b) && (semP.st==='bad' || semP.st==='warn')) items.push({key:b.b+':propio', sem:semP, propio:true});
+
+    for (const item of items){
+      countB++;
+      const s = item.sem;
+      const ver = s.ver;
+      const nb = b.alias || b.b;
+      const tag = item.propio ? ' (disponible propia)' : ' (total)';
+      h += `<div class="card" style="margin-bottom:10px;padding:12px;background:var(--bg2)">
+        <div class="f" style="margin-bottom:6px">
+          <b>${esc(nb)}${tag}</b>
+          <span class="mono" style="margin-left:auto;color:var(--bad);font-weight:700">${money(s.dif)}</span>
+        </div>
+        <div style="font-size:12px;color:var(--tx2);line-height:1.5;margin-bottom:8px">
+          • <b>Verificación en BD (VER):</b> ${ver ? money(ver.v) + ' (' + (ver.fecha||'sin fecha') + ')' : 'ninguna'}<br>
+          • <b>Saldo calculado a esa fecha:</b> ${money(s.alDia)}<br>
+          • <b>Movimientos posteriores:</b> ${money(s.post)}<br>
+          • <b>Diferencia a la fecha:</b> ${money(s.dif)}
+        </div>
+        <div class="f" style="gap:8px">
+          <button class="primary small gray" onclick="inspectorEditarVer('${item.key}', ${ver ? ver.v : 0}, '${ver ? ver.fecha : ''}')">Editar verificación</button>
+          <button class="primary small gray" style="color:var(--bad)" onclick="inspectorBorrarVer('${item.key}')">Eliminar de BD</button>
+        </div>
+      </div>`;
+    }
+  }
+  if (!countB) h += `<p class="note" style="color:var(--ok);margin-bottom:14px">✓ No hay bolsas con descuadre en la BD.</p>`;
+
+  /* 2. Presupuestos */
+  h += `<h4 style="margin:18px 0 8px">2. Rubros Excedidos o Sin Cuota (${ym})</h4>`;
+  let countP = 0;
+  if (S && S.rubros){
+    for (const r of S.rubros){
+      const st = estado(r.n, ym);
+      if (st.st === 'bad' || (st.p === 0 && st.e > 0)){
+        countP++;
+        h += `<div class="card" style="margin-bottom:10px;padding:12px;background:var(--bg2)">
+          <div class="f" style="margin-bottom:6px">
+            <b>${esc(r.n)}</b>
+            <span class="mono" style="margin-left:auto;color:var(--bad)">${st.p===0 ? 'Sin cuota' : 'Excedido'}</span>
+          </div>
+          <div style="font-size:12px;color:var(--tx2);line-height:1.5;margin-bottom:8px">
+            • <b>Gasto ejecutado en ${ym}:</b> ${money(st.e)}<br>
+            • <b>Cuota de presupuesto asignada (PTO):</b> ${money(st.p)}
+          </div>
+          <div class="f" style="gap:8px">
+            <button class="primary small gray" onclick="inspectorEditarPto('${esc(r.n)}', ${st.p}, ${st.e})">Fijar cuota en BD</button>
+          </div>
+        </div>`;
+      }
+    }
+  }
+  if (!countP) h += `<p class="note" style="color:var(--ok)">✓ No hay presupuestos excedidos en ${ym}.</p>`;
+
+  h += `</div>`;
+  openPop(h);
+}
+
+async function inspectorEditarVer(key, valActual, fechaActual){
+  const nVal = prompt('Escribí el nuevo valor verificado para '+key+' (número):', valActual);
+  if (nVal === null) return;
+  const nFecha = prompt('Escribí la fecha de la verificación (YYYY-MM-DD):', fechaActual || todayISO());
+  if (nFecha === null) return;
+  const v = parseFloat(nVal.replace(/[^0-9.-]/g,'')) || 0;
+  VER[key] = { v, fecha: nFecha, propio: key.endsWith(':propio') };
+  await DB.put('ver', { b: key, ...VER[key] });
+  armarBolsas();
+  if (typeof renderSaldos==='function') renderSaldos();
+  render();
+  if (odActivo()) await odSync();
+  toast('Verificación de '+key+' actualizada en BD.');
+  abrirInspectorBD();
+}
+
+async function inspectorBorrarVer(key){
+  if (!confirm('¿Eliminar la verificación de '+key+' de la base de datos?')) return;
+  delete VER[key];
+  await DB.del('ver', key);
+  armarBolsas();
+  if (typeof renderSaldos==='function') renderSaldos();
+  render();
+  if (odActivo()) await odSync();
+  toast('Verificación de '+key+' eliminada de la BD.');
+  abrirInspectorBD();
+}
+
+async function inspectorEditarPto(rubro, ptoActual, ejecActual){
+  const sug = Math.ceil(ejecActual / 1000) * 1000;
+  const val = prompt('Asignar cuota de presupuesto para «'+rubro+'» en '+ym+' (gastado: '+money(ejecActual)+'):', sug);
+  if (val === null) return;
+  const cuota = parseFloat(val.replace(/[^0-9.-]/g,'')) || 0;
+  const k = rubro + '|' + ym;
+  PTO[k] = cuota;
+  PTO_TS[k] = Date.now();
+  await DB.put('pto', { k, v: cuota, ts: PTO_TS[k] });
+  render();
+  if (odActivo()) await odSync();
+  toast('Cuota de '+rubro+' guardada en BD.');
+  abrirInspectorBD();
+}
 async function vincularArchivo(){
   if (!window.showSaveFilePicker){ toast('No soportado en este navegador', true); return; }
   try {
@@ -7820,6 +7981,9 @@ $('#btnDbRef').onclick = renderDb;
 $('#btnOdCon').onclick = odConectar;
 $('#btnOdSync').onclick = () => odSync();
 $('#btnOdReemplazar').onclick = reemplazarBaseOneDrive;
+$('#btnInspectorBD').onclick = abrirInspectorBD;
+$('#btnRepararConc').onclick = autoRepararConciliacion;
+$('#btnCalibrarPto').onclick = autoAjustarPresupuestosExcedidos;
 $('#btnOdOut').onclick = odDesconectar;
 $('#btnOdBase').onclick = async () => {
   try { await subirBase();
