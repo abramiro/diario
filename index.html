@@ -7861,7 +7861,7 @@ const TITULOS = {vacio:'Diario', home:'Diario', reg:'Registrar', panel:'Panel de
 function render(){
   if (!hayDatos()) view='vacio';
   $$('section').forEach(s=>s.classList.toggle('on', s.id==='v-'+view));
-  $$('nav button').forEach(b=>b.style.display = hayDatos() ? '' : 'none');
+  $$('nav button').forEach(b=>b.style.display = '');
   if (!hayDatos()){
     $('#hTitle').style.display='none'; $('#hSub').style.display='none';
     $('#btnMes').style.display='none';
@@ -7995,8 +7995,11 @@ $('#nuevaVOk').onclick = () => {
 $('#vzImportar').onclick = () => $('#vzFile').click();
 $('#vzFile').onchange = async e => {
   const f=e.target.files[0]; if(!f) return;
-  try { await importarArchivo(f); }
-  catch(err){ toast('No se pudo importar: '+err.message, true); }
+  try {
+    const text = await f.text();
+    await importar(JSON.parse(text));
+    view='home'; render();
+  } catch(err){ toast('No se pudo importar: '+(err.message||err), true); }
   e.target.value='';
 };
 $('#vzClient').onchange = e => setCfg('odClient', e.target.value.trim());
