@@ -1165,6 +1165,7 @@ input[type=text],input[type=number],input[type=date],select{
     <div id="odEstado"></div>
     <button class="primary" id="btnOdCon" style="margin:10px 0 8px">Conectar OneDrive</button>
     <button class="primary gray" id="btnOdSync" style="margin-bottom:8px">Sincronizar ahora</button>
+    <button class="primary gray" id="btnOdReemplazar" style="margin-bottom:8px">Restablecer datos desde OneDrive</button>
     <button class="primary gray" id="btnOdBase" style="margin-bottom:8px">Subir la base a OneDrive</button>
     <button class="primary gray" id="btnOdOut" style="margin-bottom:10px">Desconectar</button>
     <details>
@@ -1587,7 +1588,7 @@ input[type=text],input[type=number],input[type=date],select{
 <div id="toast"></div>
 <script>
 'use strict';
-const VERSION = '2026.08.06-04';   /* subí esto en cada cambio publicado */
+const VERSION = '2026.08.06-05';   /* subí esto en cada cambio publicado */
 /* ===================================================================
    Diario · Presupuesto — PWA local-first
    Los datos viven en IndexedDB en este dispositivo. Nada sale de acá
@@ -1827,7 +1828,9 @@ const DB = (()=>{
     async del(s,k){ const st=await tx(s,'readwrite');
       return new Promise(r=>{ const q=st.delete(k); q.onsuccess=()=>r(); }); },
     async get(s,k){ const st=await tx(s,'readonly');
-      return new Promise(r=>{ const q=st.get(k); q.onsuccess=()=>r(q.result); }); }
+      return new Promise(r=>{ const q=st.get(k); q.onsuccess=()=>r(q.result); }); },
+    async clear(s){ const st=await tx(s,'readwrite');
+      return new Promise(r=>{ const q=st.clear(); q.onsuccess=()=>r(); }); }
   };
 })();
 
@@ -4867,6 +4870,73 @@ async function fusionar(data, silencio){
   else if (add||bajas) toast('Del otro dispositivo: '+add+' nuevos'
     +(bajas?', '+bajas+' borrados':''));
 }
+
+async function reemplazarTodo(d){
+  if (!d || d.app!=='diario-presupuesto') throw new Error('Eso no es un respaldo válido');
+  for (const s of ['mov','pto','obj','act','flu','val','pen','pre','ver']) {
+    await DB.clear(s);
+  }
+  MOV = (d.mov||[]).map(m=>({...m}));
+  for (const m of MOV) await DB.put('mov', m);
+
+  Object.keys(PTO).forEach(k=>delete PTO[k]);
+  Object.keys(PTO_TS).forEach(k=>delete PTO_TS[k]);
+  for (const p of (d.pto||[])){
+    if (p.v!=null){ PTO[p.k]=p.v; PTO_TS[p.k]=p.ts||0; await DB.put('pto',{k:p.k,v:p.v,ts:p.ts||0}); }
+  }
+
+  OBJ = (d.obj||[]).map(o=>({...o}));
+  for (const o of OBJ) await DB.put('obj', o);
+
+  ACT = (d.act||[]).map(a=>({...a}));
+  for (const a of ACT) await DB.put('act', a);
+
+  FLU = (d.flu||[]).map(f=>({...f}));
+  for (const f of FLU) await DB.put('flu', f);
+
+  VAL = (d.val||[]).map(v=>({...v}));
+  for (const v of VAL) await DB.put('val', v);
+
+  PEN = (d.pen||[]).map(p=>({...p}));
+  for (const p of PEN) await DB.put('pen', p);
+
+  PRE = (d.pre||[]).map(p=>({...p}));
+  for (const p of PRE) await DB.put('pre', p);
+
+  Object.keys(VER).forEach(k=>delete VER[k]);
+  for (const v of (d.ver||[])){
+    let key = v.b;
+    if (v.propio && esPadre(v.b) && !v.b.endsWith(':propio')) key = v.b + ':propio';
+    VER[key] = {v:v.v, fecha:v.fecha, propio:!!v.propio};
+    await DB.put('ver', {b:key, ...VER[key]});
+  }
+
+  if (d.cfg){
+    if (d.cfg.bolsasEdit) await setCfg('bolsasEdit', d.cfg.bolsasEdit);
+    if (d.cfg.bolsasExtra) await setCfg('bolsasExtra', d.cfg.bolsasExtra);
+    if (d.cfg.rubrosExtra) await setCfg('rubrosExtra', d.cfg.rubrosExtra);
+    if (d.cfg.rubrosNatEdit) await setCfg('rubrosNatEdit', d.cfg.rubrosNatEdit);
+  }
+
+  armarBolsas();
+  if (typeof renderSaldos==='function') renderSaldos();
+  render();
+  if (odActivo()) await odEscribir(snapshot());
+  toast('Datos locales reemplazados completamente por el respaldo');
+}
+
+async function reemplazarBaseOneDrive(){
+  if (!odActivo()) { toast('Conectá OneDrive primero', true); return; }
+  if (!confirm('¿Deseas REEMPLAZAR completamente los datos de este dispositivo con los de OneDrive?\n\nSe vaciarán los saldos, verificaciones y presupuestos locales y se cargarán los de OneDrive.')) return;
+  try {
+    const remoto = await odLeer();
+    if (!remoto) { toast('No hay respaldo diario.json en OneDrive', true); return; }
+    await reemplazarTodo(remoto);
+    toast('Base reemplazada con éxito desde OneDrive');
+  } catch(e) {
+    toast('Error al leer de OneDrive: ' + e.message, true);
+  }
+}
 async function vincularArchivo(){
   if (!window.showSaveFilePicker){ toast('No soportado en este navegador', true); return; }
   try {
@@ -7749,6 +7819,7 @@ $('#btnTasas2').onclick = () => actualizarTasas();
 $('#btnDbRef').onclick = renderDb;
 $('#btnOdCon').onclick = odConectar;
 $('#btnOdSync').onclick = () => odSync();
+$('#btnOdReemplazar').onclick = reemplazarBaseOneDrive;
 $('#btnOdOut').onclick = odDesconectar;
 $('#btnOdBase').onclick = async () => {
   try { await subirBase();
