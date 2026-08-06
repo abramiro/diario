@@ -7535,7 +7535,211 @@ function renderConcil(){
   if (btnI) btnI.onclick = abrirInspectorBD;
 }
 
-/* ---------- resumen de estado de presupuestos en la pantalla de Saldos ---------- */
+/* ---------- Inspector / Arqueo de Registros en BD ---------- */
+function abrirInspectorBD(bolsaInicial){
+  /* Reusa el panel fijo #bsa para no agregar HTML estático */
+  const nb0 = (typeof bolsaInicial === 'string') ? bolsaInicial : null;
+
+  /* Construir lista de bolsas que NO cuadran para el selector */
+  const descuadradas = [];
+  BOLSAS.forEach(b => {
+    if (!esPadre(b.b) && VER[b.b]) descuadradas.push({b:b.b, propio:false});
+    if (esPadre(b.b)){
+      if (VER[b.b])            descuadradas.push({b:b.b, propio:false});
+      if (VER[b.b+':propio'])  descuadradas.push({b:b.b, propio:true});
+    }
+  });
+  /* Agregar todas las bolsas con saldo para inspección libre */
+  const todas = BOLSAS.filter(b => Math.abs(saldoPropio(b.b)) > 0.5 || VER[b.b])
+                       .map(b => ({b:b.b, propio:false}));
+  const enLista = new Set(descuadradas.map(x=>x.b+(x.propio?':p':'')));
+  todas.forEach(x => { if (!enLista.has(x.b+(x.propio?':p':''))) descuadradas.push(x); });
+
+  let selBolsa = nb0 || (descuadradas[0] ? descuadradas[0].b : BOLSAS[0].b);
+
+  function pintarInspector(){
+    const info = BOLSA[selBolsa] || {tipo:'Electronico'};
+    const cur = info.moneda || 'COP';
+    const apertura = info.saldo || 0;
+    const ver = VER[selBolsa];
+
+    /* Recopilar movimientos que afectan esta bolsa */
+    const filas = [];
+    for (const m of MOV){
+      if (m.borrado) continue;
+      let efecto = 0, motivo = '';
+      if (m.tipo === 'traslado'){
+        if (m.de === selBolsa){ efecto = -(m.deOrig||m.valor); motivo = '→ '+nomB(m.a); }
+        else if (m.a === selBolsa){ efecto = +(m.aOrig||m.valor); motivo = '← '+nomB(m.de); }
+        else continue;
+      } else {
+        const v = m.valorOrig != null ? m.valorOrig : m.valor;
+        const esIng = !!(RB[m.r] && RB[m.r].nat === 'Ingreso');
+        if (info.tipo === 'Deuda'){
+          if (m.bolsa === selBolsa){ efecto = +v; motivo = m.r+' (cargo)'; }
+          else if (m.r === selBolsa){ efecto = -v; motivo = m.r+' (abono)'; }
+          else continue;
+        } else if (info.tipo === 'Prestado'){
+          if (m.r === selBolsa){ efecto = +v; motivo = m.r+' (retorno)'; }
+          else if (m.bolsa === selBolsa){ efecto = (esIng?1:-1)*v; motivo = m.r; }
+          else continue;
+        } else if (selBolsa === 'Caja'){
+          if (m.bolsa==='Caja' || m.r==='Retiro' || m.r==='Consignación'){
+            const mas = (m.r==='Retiro') || (esIng && m.r!=='Consignación');
+            efecto = (mas?1:-1)*v;
+            motivo = m.r;
+          } else continue;
+        } else {
+          if (m.bolsa === selBolsa){ efecto = (esIng?1:-1)*v; motivo = m.r; }
+          else continue;
+        }
+      }
+      filas.push({m, efecto, motivo});
+    }
+    /* Ordenar por fecha ascendente */
+    filas.sort((a,b) => (a.m.fecha||'').localeCompare(b.m.fecha||'') || (a.m.ts||0)-(b.m.ts||0));
+
+    /* Calcular saldo corrido */
+    let corrido = apertura;
+    const rows = filas.map(f => {
+      corrido += f.efecto;
+      return {...f, saldoDespues: corrido};
+    });
+
+    const saldoFinal = corrido;
+    const delta = saldoFinal - apertura;
+    const difVer = ver ? saldoFinal - ver.v : null;
+
+    /* Selector de bolsa */
+    let html = `<div style="margin-bottom:14px">
+      <label class="lbl" style="display:block;margin-bottom:6px">Bolsa a inspeccionar</label>
+      <select id="inspBolsaSel" style="width:100%;background:var(--bg3);border:1px solid var(--line);
+        border-radius:9px;padding:9px 11px;color:var(--tx);font-size:14px;max-width:100%">
+        ${descuadradas.map(x => {
+          const lbl = nomB(x.b) + (x.propio?' (disponible propia)':'');
+          const val = x.b;
+          return `<option value="${val}"${val===selBolsa?' selected':''}>${lbl}</option>`;
+        }).join('')}
+      </select>
+    </div>`;
+
+    /* Resumen */
+    html += `<div class="card" style="margin-bottom:14px">
+      <h3>ARQUEO · ${nomB(selBolsa)}</h3>
+      <table>
+        <tr><td>Saldo de apertura (semilla)</td>
+            <td class="mono">${montoEn(cur, apertura)}</td></tr>
+        <tr><td>Movimientos en la app (${rows.length})</td>
+            <td class="mono" style="color:${delta>=0?'var(--ok)':'var(--bad)'}">
+              ${delta>=0?'+':''}${montoEn(cur, delta)}</td></tr>
+        <tr class="tot"><td><b>Saldo calculado</b></td>
+            <td class="mono"><b>${montoEn(cur, saldoFinal)}</b></td></tr>
+        ${ver ? `<tr><td>Saldo verificado (${fCorta(ver.fecha)})</td>
+            <td class="mono">${montoEn(cur, ver.v)}</td></tr>
+        <tr class="tot"><td style="color:${Math.abs(difVer)<1?'var(--ok)':'var(--bad)}">
+            <b>${Math.abs(difVer)<1?'✓ Cuadra':'❌ Descuadre'}</b></td>
+            <td class="mono" style="color:${Math.abs(difVer)<1?'var(--ok)':'var(--bad)}">
+            <b>${montoEn(cur, difVer)}</b></td></tr>` : ''}
+      </table>
+    </div>`;
+
+    /* Tabla de movimientos */
+    html += `<div class="card" style="padding:8px 10px">
+      <h3 style="margin-bottom:8px">DETALLE DE MOVIMIENTOS (${rows.length})</h3>
+      <div style="overflow-x:auto">
+      <table style="font-size:12px;min-width:500px">
+        <tr><th style="width:80px">Fecha</th><th>Concepto</th><th>Observación</th>
+            <th class="n" style="width:100px">Efecto</th>
+            <th class="n" style="width:110px">Saldo</th>
+            <th style="width:80px"></th></tr>
+        <tr style="background:var(--bg3)"><td></td><td colspan="2"><b>Apertura (semilla)</b></td>
+            <td></td><td class="mono n"><b>${montoEn(cur, apertura)}</b></td><td></td></tr>`;
+
+    for (const r of rows){
+      const color = r.efecto >= 0 ? 'var(--ok)' : 'var(--bad)';
+      const sign = r.efecto >= 0 ? '+' : '';
+      html += `<tr>
+        <td style="white-space:nowrap">${r.m.fecha||'—'}</td>
+        <td>${r.motivo}</td>
+        <td style="color:var(--tx3);max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
+            title="${(r.m.obs||'').replace(/"/g,'&quot;')}">${r.m.obs||''}</td>
+        <td class="mono n" style="color:${color}">${sign}${montoEn(cur, r.efecto)}</td>
+        <td class="mono n">${montoEn(cur, r.saldoDespues)}</td>
+        <td style="white-space:nowrap">
+          <button class="chipbtn" data-insp-edit="${r.m.id}" style="font-size:10px;padding:3px 8px">✏️</button>
+          <button class="chipbtn" data-insp-del="${r.m.id}" style="font-size:10px;padding:3px 8px;color:var(--bad)">🗑</button>
+        </td>
+      </tr>`;
+    }
+
+    html += `<tr class="tot" style="background:var(--bg3)"><td></td><td colspan="2"><b>Saldo final</b></td>
+      <td></td><td class="mono n"><b>${montoEn(cur, saldoFinal)}</b></td><td></td></tr>`;
+    html += `</table></div></div>`;
+
+    $('#bsaTit').textContent = '🔍 Inspector BD';
+    $('#bsaCuerpo').innerHTML = html;
+    $('#bsa').style.display = 'flex';
+
+    /* Eventos */
+    const selEl = $$real('#inspBolsaSel');
+    if (selEl) selEl.onchange = () => { selBolsa = selEl.value; pintarInspector(); };
+
+    /* Editar monto de un movimiento */
+    $$('[data-insp-edit]').forEach(btn => {
+      btn.onclick = async () => {
+        const mid = btn.dataset.inspEdit;
+        const m = MOV.find(x => x.id === mid);
+        if (!m) return;
+        const cur2 = m.moneda || 'COP';
+        const vOrig = m.valorOrig != null ? m.valorOrig : m.valor;
+        const nuevo = prompt(
+          `Editar movimiento\n\n`
+          + `Fecha: ${m.fecha}\n`
+          + `Rubro: ${m.r || m.tipo}\n`
+          + `Obs: ${m.obs || ''}\n\n`
+          + `Monto actual: ${vOrig}\n\n`
+          + `Nuevo monto (vacío = cancelar):`, vOrig);
+        if (nuevo === null || nuevo.trim() === '') return;
+        const nVal = parseFloat(nuevo.replace(/[^0-9.\-]/g,''));
+        if (isNaN(nVal)){ toast('Monto no válido', true); return; }
+        if (m.valorOrig != null) m.valorOrig = nVal;
+        else m.valor = nVal;
+        if (m.moneda && m.moneda !== 'COP'){
+          m.valor = Math.round(nVal * trmDe(m.moneda));
+        } else {
+          m.valor = nVal;
+        }
+        if (m.tipo === 'traslado'){
+          if (m.de === selBolsa) m.deOrig = nVal;
+          if (m.a === selBolsa) m.aOrig = nVal;
+        }
+        m.ts = Date.now();
+        await DB.put('mov', m);
+        armarBolsas(); pintarInspector(); autoSave();
+        toast('Movimiento actualizado');
+      };
+    });
+
+    /* Borrar (marcar borrado) */
+    $$('[data-insp-del]').forEach(btn => {
+      btn.onclick = async () => {
+        const mid = btn.dataset.inspDel;
+        const m = MOV.find(x => x.id === mid);
+        if (!m) return;
+        const vOrig = m.valorOrig != null ? m.valorOrig : m.valor;
+        if (!confirm(`¿Borrar este movimiento?\n\nFecha: ${m.fecha}\nRubro: ${m.r || m.tipo}\nMonto: ${vOrig}\nObs: ${m.obs || ''}`)) return;
+        m.borrado = todayISO();
+        m.ts = Date.now();
+        await DB.put('mov', m);
+        armarBolsas(); pintarInspector(); autoSave();
+        toast('Movimiento eliminado');
+      };
+    });
+  }
+
+  pintarInspector();
+}
+
 function renderPtoControl(){
   const cont = $$real('#slPtoControl');
   if (!cont) return;
