@@ -7629,7 +7629,7 @@ function abrirInspectorBD(bolsaInicial){
       <h3>ARQUEO · ${nomB(selBolsa)}</h3>
       <table>
         <tr><td>Saldo de apertura (semilla)</td>
-            <td class="mono">${montoEn(cur, apertura)}</td></tr>
+            <td class="mono">${montoEn(cur, apertura)} <button class="chipbtn" id="btnEditApertura" style="font-size:10px;padding:2px 7px;margin-left:6px">✏️ Editar inicial</button></td></tr>
         <tr><td>Movimientos registrados (${rows.length})</td>
             <td class="mono" style="color:${delta>=0?'var(--ok)':'var(--bad)'}">
               ${delta>=0?'+':''}${montoEn(cur, delta)}</td></tr>
@@ -7646,7 +7646,10 @@ function abrirInspectorBD(bolsaInicial){
 
     /* Tabla de movimientos */
     html += `<div class="card" style="padding:8px 10px">
-      <h3 style="margin-bottom:8px">DETALLE DE MOVIMIENTOS (${rows.length})</h3>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <h3 style="margin:0">DETALLE DE MOVIMIENTOS (${rows.length})</h3>
+        <button class="chipbtn on" id="btnAddMovInspector" style="font-size:11px;padding:4px 10px">+ Agregar Movimiento</button>
+      </div>
       <div style="overflow-x:auto">
       <table style="font-size:12px;min-width:500px">
         <tr><th style="width:80px">Fecha</th><th>Concepto</th><th>Observación</th>
@@ -7684,6 +7687,41 @@ function abrirInspectorBD(bolsaInicial){
     /* Eventos */
     const selEl = $$real('#inspBolsaSel');
     if (selEl) selEl.onchange = () => { selBolsa = selEl.value; pintarInspector(); };
+
+    /* Editar saldo de apertura */
+    const btnApertura = $$real('#btnEditApertura');
+    if (btnApertura){
+      btnApertura.onclick = async () => {
+        const nuevo = prompt(`Editar Saldo de Apertura (Semilla) para ${nomB(selBolsa)}:\n\nMonto actual: ${apertura}\n\nNuevo saldo inicial:`, apertura);
+        if (nuevo === null || nuevo.trim() === '') return;
+        const nVal = parseFloat(nuevo.replace(/[^0-9.\-]/g,''));
+        if (isNaN(nVal)){ toast('Monto no válido', true); return; }
+        const ed = { ...(CFG.bolsasEdit || {}) };
+        ed[selBolsa] = { ...(ed[selBolsa] || {}), saldo: nVal };
+        await setCfg('bolsasEdit', ed);
+        armarBolsas();
+        pintarInspector();
+        autoSave();
+        toast('Saldo de apertura actualizado');
+      };
+    }
+
+    /* Agregar movimiento nuevo */
+    const btnAdd = $$real('#btnAddMovInspector');
+    if (btnAdd){
+      btnAdd.onclick = () => {
+        const mNuevo = {
+          id: uuid(),
+          fecha: todayISO(),
+          bolsa: selBolsa,
+          r: (S && S.rubros && S.rubros[0]) ? S.rubros[0].n : 'Otros',
+          valor: 0,
+          obs: '',
+          esNuevo: true
+        };
+        abrirModalEditorMov(mNuevo);
+      };
+    }
 
     function abrirModalEditorMov(m){
       const vOrig = m.valorOrig != null ? m.valorOrig : m.valor;
