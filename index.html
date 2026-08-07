@@ -1606,7 +1606,7 @@ input[type=text],input[type=number],input[type=date],select{
 <div id="toast"></div>
 <script>
 'use strict';
-const VERSION = '2026.08.06-11';   /* subí esto en cada cambio publicado */
+const VERSION = '2026.08.06-12';   /* subí esto en cada cambio publicado */
 /* ===================================================================
    Diario · Presupuesto — PWA local-first
    Los datos viven en IndexedDB en este dispositivo. Nada sale de acá
@@ -4826,7 +4826,7 @@ async function fusionar(data, silencio){
   if (!data || data.app!=='diario-presupuesto'){
     if(!silencio) toast('Archivo no reconocido', true); return; }
   const idx = new Map(MOV.map(m=>[m.id,m]));
-  let add=0, bajas=0;
+  let add=0, bajas=0, verCambios=0;
   for (const m of (data.mov||[])){
     const mio = idx.get(m.id);
     if (!mio){ MOV.push(m); await DB.put('mov',m); add++; if (m.borrado) bajas++; continue; }
@@ -4858,9 +4858,12 @@ async function fusionar(data, silencio){
       ? tsNuevo >= tsLocal
       : !!v.fecha && (!cur.fecha || v.fecha >= cur.fecha));
     if (gana){
+      const cambio = !cur || cur.v !== v.v || cur.fecha !== v.fecha
+        || !!cur.propio !== !!v.propio || (cur.borrado||null) !== (v.borrado||null);
       VER[key] = { v: v.v, fecha: v.fecha, propio: !!v.propio,
         ts: tsNuevo, borrado: v.borrado || null };
       await DB.put('ver', { b: key, ...VER[key] });
+      if (cambio) verCambios++;
     }
   }
   for (const [store, arr, cur] of [['act',data.act,ACT],['flu',data.flu,FLU],
@@ -4919,9 +4922,12 @@ async function fusionar(data, silencio){
     if (cambioCfg) armarBolsas();
   }
   render();
-  if (!silencio) toast('Fusionado: '+add+' nuevos'+(bajas?', '+bajas+' de baja':''));
-  else if (add||bajas) toast('Del otro dispositivo: '+add+' nuevos'
-    +(bajas?', '+bajas+' borrados':''));
+  if (!silencio) toast('Fusionado: '+add+' nuevos'+(bajas?', '+bajas+' de baja':'')
+    +(verCambios?', '+verCambios+' conciliaciones':''));
+  else if (add||bajas||verCambios) toast('Del otro dispositivo: '+add+' nuevos'
+    +(bajas?', '+bajas+' borrados':'')
+    +(verCambios?', '+verCambios+' conciliaciones':''));
+  return {add, bajas, verCambios};
 }
 
 async function reemplazarTodo(d){
@@ -5782,6 +5788,7 @@ let odEnCurso = false;
 async function odSync(silencio){
   if (!odActivo()){ if(!silencio) toast('Conectá OneDrive primero', true); return; }
   if (odEnCurso) return;
+  clearTimeout(odT); odT = null;
   odEnCurso = true;
   try {
     /* Si tengo la base y en OneDrive no está, la subo. Así el orden en que
@@ -7447,13 +7454,16 @@ function bsaPintar(){
       VAL.push(rec); await DB.put('val', rec);
     }
     bsaPintar(); renderSaldos(); autoSave();
+    if (odActivo()) await odSync(true);
     const d = s - VER[clave].v;
     toast(Math.abs(d)<1 ? nomB(nb)+' cuadra' : 'Diferencia de '+montoEn(cur,d), Math.abs(d)>=1);
   };
   $('#bsaBorrarVer').onclick = async () => {
     const clave = verClave(nb, esPropio);
     await borrarVerificacion(clave);
-    bsaPintar(); renderSaldos(); autoSave(); toast('Verificación quitada');
+    bsaPintar(); renderSaldos(); autoSave();
+    if (odActivo()) await odSync(true);
+    toast('Verificación quitada');
   };
   const mm = $$real('#bsaModo');
   if (mm) mm.onclick = e => { const b=e.target.closest('[data-m]'); if(!b) return;
@@ -8678,6 +8688,15 @@ async function boot(){
     }
     odSync(true);                        /* traer lo del otro dispositivo al abrir */
   }
+  /* En celular la PWA suele quedar suspendida: volver a verla no ejecuta boot().
+     Reconsultar al regresar evita que se quede mostrando conciliaciones viejas. */
+  const odAlVolver = () => {
+    if (document.visibilityState === 'visible' && navigator.onLine && odActivo()
+        && (!ODT.ultima || Date.now()-ODT.ultima > 15000)) odSync(true);
+  };
+  document.addEventListener('visibilitychange', odAlVolver);
+  window.addEventListener('online', odAlVolver);
+  setInterval(odAlVolver, 120000);
   if (navigator.storage && navigator.storage.persist)
     navigator.storage.persisted().then(p => { if (!p) navigator.storage.persist().catch(()=>{}); }).catch(()=>{});
   if ('serviceWorker' in navigator){
@@ -8685,7 +8704,7 @@ async function boot(){
     navigator.serviceWorker.addEventListener('controllerchange', () => {
       if (!refreshing) { refreshing = true; window.location.reload(); }
     });
-    navigator.serviceWorker.register('sw.js?v=27').then(reg=>{
+    navigator.serviceWorker.register('sw.js?v=41').then(reg=>{
       reg.addEventListener('updatefound', ()=>{
         const nuevo = reg.installing;
         if (!nuevo) return;
