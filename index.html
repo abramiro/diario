@@ -7684,39 +7684,118 @@ function abrirInspectorBD(bolsaInicial){
     const selEl = $$real('#inspBolsaSel');
     if (selEl) selEl.onchange = () => { selBolsa = selEl.value; pintarInspector(); };
 
-    /* Editar monto de un movimiento */
-    $$('[data-insp-edit]').forEach(btn => {
-      btn.onclick = async () => {
-        const mid = btn.dataset.inspEdit;
-        const m = MOV.find(x => x.id === mid);
-        if (!m) return;
-        const cur2 = m.moneda || 'COP';
-        const vOrig = m.valorOrig != null ? m.valorOrig : m.valor;
-        const nuevo = prompt(
-          `Editar movimiento\n\n`
-          + `Fecha: ${m.fecha}\n`
-          + `Rubro: ${m.r || m.tipo}\n`
-          + `Obs: ${m.obs || ''}\n\n`
-          + `Monto actual: ${vOrig}\n\n`
-          + `Nuevo monto (vacío = cancelar):`, vOrig);
-        if (nuevo === null || nuevo.trim() === '') return;
-        const nVal = parseFloat(nuevo.replace(/[^0-9.\-]/g,''));
-        if (isNaN(nVal)){ toast('Monto no válido', true); return; }
-        if (m.valorOrig != null) m.valorOrig = nVal;
-        else m.valor = nVal;
+    function abrirModalEditorMov(m){
+      const vOrig = m.valorOrig != null ? m.valorOrig : m.valor;
+      const isTraslado = m.tipo === 'traslado';
+      
+      const modal = document.createElement('div');
+      modal.style.cssText = 'position:fixed;inset:0;z-index:95;background:rgba(0,0,0,.75);'
+        + 'display:flex;align-items:center;justify-content:center;padding:16px';
+        
+      let html = `<div class="card" style="max-width:420px;width:100%;margin:0;max-height:90vh;overflow:auto">
+        <h3 style="margin-bottom:12px">✏️ Editar Movimiento</h3>
+        
+        <div style="margin-bottom:10px">
+          <label class="lbl" style="display:block;margin-bottom:4px">Fecha</label>
+          <input type="date" id="edInspFecha" value="${m.fecha || todayISO()}" style="width:100%;max-width:100%">
+        </div>`;
+
+      if (!isTraslado){
+        html += `<div style="margin-bottom:10px">
+          <label class="lbl" style="display:block;margin-bottom:4px">Bolsa</label>
+          <select id="edInspBolsa" style="width:100%;max-width:100%">
+            ${BOLSAS.map(b => `<option value="${b.b}"${b.b===(m.bolsa||selBolsa)?' selected':''}>${nomB(b.b)}</option>`).join('')}
+          </select>
+        </div>
+        <div style="margin-bottom:10px">
+          <label class="lbl" style="display:block;margin-bottom:4px">Rubro / Concepto</label>
+          <select id="edInspRubro" style="width:100%;max-width:100%">
+            ${(S ? S.rubros : []).map(r => `<option value="${r.n}"${r.n===m.r?' selected':''}>${r.n} (${r.cat})</option>`).join('')}
+          </select>
+        </div>`;
+      } else {
+        html += `<div style="margin-bottom:10px">
+          <label class="lbl" style="display:block;margin-bottom:4px">Bolsa Origen (De)</label>
+          <select id="edInspDe" style="width:100%;max-width:100%">
+            ${BOLSAS.map(b => `<option value="${b.b}"${b.b===m.de?' selected':''}>${nomB(b.b)}</option>`).join('')}
+          </select>
+        </div>
+        <div style="margin-bottom:10px">
+          <label class="lbl" style="display:block;margin-bottom:4px">Bolsa Destino (A)</label>
+          <select id="edInspA" style="width:100%;max-width:100%">
+            ${BOLSAS.map(b => `<option value="${b.b}"${b.b===m.a?' selected':''}>${nomB(b.b)}</option>`).join('')}
+          </select>
+        </div>`;
+      }
+
+      html += `<div style="margin-bottom:10px">
+        <label class="lbl" style="display:block;margin-bottom:4px">Monto (${m.moneda||'COP'})</label>
+        <input type="number" step="any" id="edInspMonto" value="${vOrig}" style="width:100%;max-width:100%">
+      </div>
+      <div style="margin-bottom:14px">
+        <label class="lbl" style="display:block;margin-bottom:4px">Observación</label>
+        <input type="text" id="edInspObs" value="${(m.obs||'').replace(/"/g,'&quot;')}" style="width:100%;max-width:100%" placeholder="Nota u observación">
+      </div>
+      
+      <div style="display:flex;gap:8px">
+        <button class="primary" id="edInspGuardar">Guardar Cambios</button>
+        <button class="primary gray" id="edInspCancelar">Cancelar</button>
+      </div>
+      </div>`;
+
+      modal.innerHTML = html;
+      document.body.appendChild(modal);
+
+      $$real('#edInspCancelar').onclick = () => modal.remove();
+      $$real('#edInspGuardar').onclick = async () => {
+        const fVal = $$real('#edInspFecha').value;
+        const mVal = parseFloat($$real('#edInspMonto').value);
+        const obsVal = $$real('#edInspObs').value.trim();
+
+        if (!fVal || !/^\d{4}-\d{2}-\d{2}$/.test(fVal)){ toast('Fecha no válida', true); return; }
+        if (isNaN(mVal)){ toast('Monto no válido', true); return; }
+
+        m.fecha = fVal;
+        m.ym = fVal.slice(0, 7);
+        m.dt = fVal + (m.dt ? m.dt.slice(10) : 'T12:00');
+        m.obs = obsVal;
+
+        if (m.valorOrig != null) m.valorOrig = mVal;
+        else m.valor = mVal;
+        
         if (m.moneda && m.moneda !== 'COP'){
-          m.valor = Math.round(nVal * trmDe(m.moneda));
+          m.valor = Math.round(mVal * trmDe(m.moneda));
         } else {
-          m.valor = nVal;
+          m.valor = mVal;
         }
-        if (m.tipo === 'traslado'){
-          if (m.de === selBolsa) m.deOrig = nVal;
-          if (m.a === selBolsa) m.aOrig = nVal;
+
+        if (!isTraslado){
+          const nBol = $$real('#edInspBolsa').value;
+          m.bolsa = nBol;
+          m.r = $$real('#edInspRubro').value;
+        } else {
+          m.de = $$real('#edInspDe').value;
+          m.a = $$real('#edInspA').value;
+          m.deOrig = mVal;
+          m.aOrig = mVal;
         }
+
         m.ts = Date.now();
         await DB.put('mov', m);
-        armarBolsas(); pintarInspector(); autoSave();
+        armarBolsas();
+        pintarInspector();
+        autoSave();
+        modal.remove();
         toast('Movimiento actualizado');
+      };
+    }
+
+    /* Editar un movimiento completo */
+    $$('[data-insp-edit]').forEach(btn => {
+      btn.onclick = () => {
+        const mid = btn.dataset.inspEdit;
+        const m = MOV.find(x => x.id === mid);
+        if (m) abrirModalEditorMov(m);
       };
     });
 
