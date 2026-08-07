@@ -8481,6 +8481,8 @@ document.addEventListener('keydown', e => {
   else if (e.key==='Backspace') key('del');
   else if (e.key==='Enter') guardar();
   else if (e.key==='Escape') closePad();
+});
+
 async function setCfg(k, v){
   CFG[k] = v;
   await DB.put('cfg', { k, v });
