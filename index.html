@@ -7499,11 +7499,10 @@ function renderConcil(){
     if (!esPadre(b.b)) {
       est.push({ b: b.b, isPropio: false, ...semaforo(b.b, false) });
     } else {
-      if (VER[b.b]) {
-        est.push({ b: b.b, isPropio: false, ...semaforo(b.b, false) });
-      }
       if (VER[b.b + ':propio']) {
         est.push({ b: b.b, isPropio: true, ...semaforo(b.b, true) });
+      } else if (VER[b.b]) {
+        est.push({ b: b.b, isPropio: false, ...semaforo(b.b, false) });
       }
     }
   });
@@ -7714,8 +7713,7 @@ function abrirInspectorBD(bolsaInicial){
       btnApertura.onclick = async () => {
         const nuevo = prompt(`Editar Saldo de Apertura (Semilla) para ${nomB(selBolsa)}:\n\nMonto actual: ${apertura}\n\nNuevo saldo inicial:`, apertura);
         if (nuevo === null || nuevo.trim() === '') return;
-        const nVal = parseFloat(nuevo.replace(/[^0-9.\-]/g,''));
-        if (isNaN(nVal)){ toast('Monto no válido', true); return; }
+        const nVal = parseMonto(nuevo);
         const ed = { ...(CFG.bolsasEdit || {}) };
         ed[selBolsa] = { ...(ed[selBolsa] || {}), saldo: nVal };
         await setCfg('bolsasEdit', ed);
@@ -8519,6 +8517,13 @@ async function boot(){
        existía el registro — la app quedaba «vacía» con los datos intactos. */
     if (c.k==='rubrosExtra'){ boot._rubrosX = c.v || []; }
     else if (c.k==='catsExtra'){ CATX = c.v || []; }
+    else if (c.k==='bolsasEdit'){
+      const ed = c.v || {};
+      for (const b in ed){
+        if (ed[b] && Math.abs(ed[b].saldo) > 1e11) ed[b].saldo = 0;
+      }
+      CFG[c.k] = ed;
+    }
     else CFG[c.k]=c.v;
   });
   const base = await DB.get('cfg','base');
