@@ -1606,7 +1606,7 @@ input[type=text],input[type=number],input[type=date],select{
 <div id="toast"></div>
 <script>
 'use strict';
-const VERSION = '2026.08.06-10';   /* subí esto en cada cambio publicado */
+const VERSION = '2026.08.06-11';   /* subí esto en cada cambio publicado */
 /* ===================================================================
    Diario · Presupuesto — PWA local-first
    Los datos viven en IndexedDB en este dispositivo. Nada sale de acá
@@ -1756,7 +1756,10 @@ const CFG_DEF = {
    en pesos: AhorroEUR y AhorroEUR_$ en euros, AhorroUS en dólares. Todo se
    guarda convertido a pesos, y además se conserva el monto original y la tasa
    usada, para que un cambio de TRM no reescriba la historia. */
-const monedaDe = b => (S && S.monedaBolsa[b]) || 'COP';
+/* La bolsa armada contiene también las monedas de bolsas nuevas o editadas.
+   La semilla queda como respaldo durante el arranque y para bases antiguas. */
+const monedaDe = b => (BOLSA[b] && BOLSA[b].moneda)
+  || (S && S.monedaBolsa[b]) || 'COP';
 const simbolo  = c => (S && S.simb[c]) || '$';
 function trmDe(c){
   if (c==='EUR') return CFG.trmEUR || (S?S.trm.EUR:0);
@@ -1775,6 +1778,8 @@ function montoEn(cur, n){
 /* ---------- estado ---------- */
 let MOV=[], PTO={}, PTO_TS={}, OBJ=[], CFG={...CFG_DEF}, FH=null;
 let view='home', ym=null, pad={r:null,v:'',bolsa:null,dt:null};
+let BOLSAS=[];                       /* seed + bolsillos propios, con ediciones */
+const BOLSA={};
 
 /* ---------- utilidades ---------- */
 const nf = new Intl.NumberFormat('es-CO',{maximumFractionDigits:0});
@@ -3222,7 +3227,7 @@ async function prEjecutar(p, x, armar){
     bolsa = p.n;
     if (!BOLSA[bolsa]){
       const extra = [...(CFG.bolsasExtra||[]),
-        {b:bolsa, tipo:'Prestado', grupo:'Prestado', saldo:0, moneda:'COP'}];
+        {b:bolsa, tipo:'Prestado', grupo:'Prestado', saldo:0, moneda:'COP', _ts:Date.now()}];
       await setCfg('bolsasExtra', extra);
       armarBolsas();
     }
@@ -3560,7 +3565,7 @@ async function limpiarDuplicadosTrii(){
                
   const ed = {...(CFG.bolsasEdit||{})};
   for (const s of secundarias){
-    ed[s.b] = {...(ed[s.b]||{}), padre: principal.b};
+    ed[s.b] = {...(ed[s.b]||{}), padre: principal.b, _ts:Date.now()};
   }
   await setCfg('bolsasEdit', ed);
   armarBolsas(); renderSaldos(); render(); autoSave();
@@ -3702,7 +3707,8 @@ async function nuevaCuenta(){
   if (sTxt===null) return;
   const saldo = parseFloat(String(sTxt).replace(',','.'))||0;
   const tipo = grupo==='Prestado' ? 'Prestado' : grupo==='Deuda' ? 'Deuda' : 'Electronico';
-  const extra = [...(CFG.bolsasExtra||[]), {b:n, tipo, grupo, saldo, moneda:'COP'}];
+  const extra = [...(CFG.bolsasExtra||[]),
+    {b:n, tipo, grupo, saldo, moneda:'COP', _ts:Date.now()}];
   await setCfg('bolsasExtra', extra);
   armarBolsas(); renderBolsas(); renderSaldos(); autoSave();
   toast('Cuenta «'+n+'» creada en '+grupo);
@@ -4846,8 +4852,14 @@ async function fusionar(data, silencio){
     let key = v.b;
     if (v.propio && esPadre(v.b) && !v.b.endsWith(':propio')) key = v.b + ':propio';
     const cur = VER[key];
-    if (!cur || (v.fecha && (!cur.fecha || v.fecha >= cur.fecha))){
-      VER[key] = { v: v.v, fecha: v.fecha, propio: !!v.propio };
+    const tsNuevo = v.ts || v.borrado || 0;
+    const tsLocal = cur ? (cur.ts || cur.borrado || 0) : -1;
+    const gana = !cur || ((tsNuevo || tsLocal)
+      ? tsNuevo >= tsLocal
+      : !!v.fecha && (!cur.fecha || v.fecha >= cur.fecha));
+    if (gana){
+      VER[key] = { v: v.v, fecha: v.fecha, propio: !!v.propio,
+        ts: tsNuevo, borrado: v.borrado || null };
       await DB.put('ver', { b: key, ...VER[key] });
     }
   }
@@ -4875,19 +4887,20 @@ async function fusionar(data, silencio){
     let cambioCfg = false;
     if (data.cfg.bolsasEdit){
       const ed = {...(CFG.bolsasEdit||{})};
-      for (const [k, v] of Object.entries(data.cfg.bolsasEdit)){
-        const loc = ed[k];
-        if (!loc || (v.ts || 0) >= (loc.ts || 0)) {
-          ed[k] = {...(loc||{}), ...v};
+      for (const [b, remoto] of Object.entries(data.cfg.bolsasEdit)){
+        const local = ed[b];
+        if (!local || (remoto._ts||0) > (local._ts||0)){
+          ed[b] = remoto; cambioCfg = true;
         }
       }
-      await setCfg('bolsasEdit', ed); cambioCfg = true;
+      if (cambioCfg) await setCfg('bolsasEdit', ed);
     }
     if (data.cfg.bolsasExtra){
-      const ids = new Set((CFG.bolsasExtra||[]).map(b=>b.b));
-      let ed = [...(CFG.bolsasExtra||[])];
+      const ed = [...(CFG.bolsasExtra||[])];
       for (const b of data.cfg.bolsasExtra){
-        if (!ids.has(b.b)){ ed.push(b); cambioCfg = true; }
+        const i = ed.findIndex(x=>x.b===b.b);
+        if (i<0){ ed.push(b); cambioCfg = true; }
+        else if ((b._ts||0) > (ed[i]._ts||0)){ ed[i]=b; cambioCfg = true; }
       }
       if (cambioCfg) await setCfg('bolsasExtra', ed);
     }
@@ -4947,7 +4960,8 @@ async function reemplazarTodo(d){
   for (const v of (d.ver||[])){
     let key = v.b;
     if (v.propio && esPadre(v.b) && !v.b.endsWith(':propio')) key = v.b + ':propio';
-    VER[key] = {v:v.v, fecha:v.fecha, propio:!!v.propio};
+    VER[key] = {v:v.v, fecha:v.fecha, propio:!!v.propio,
+      ts:v.ts||v.borrado||0, borrado:v.borrado||null};
     await DB.put('ver', {b:key, ...VER[key]});
   }
 
@@ -4978,22 +4992,20 @@ async function reemplazarBaseOneDrive(){
   }
 }
 
-async function autoRepararConciliacion(){
-  let count = 0;
+async function limpiarVerificacionesDescuadradas(){
+  const malas = [];
   for (const k of Object.keys(VER)){
     const baseBolsa = k.replace(':propio', '');
     const sem = semaforo(baseBolsa, k.endsWith(':propio'));
-    if (sem.st === 'bad' || sem.st === 'warn'){
-      delete VER[k];
-      await DB.del('ver', k);
-      count++;
-    }
+    if (sem.st === 'bad') malas.push(k);
   }
-  armarBolsas();
+  if (!malas.length){ toast('No hay verificaciones en rojo para limpiar'); return; }
+  if (!confirm(`Se quitarán ${malas.length} verificaciones en rojo.\n\nLos movimientos y saldos de apertura no se modificarán. ¿Continuar?`)) return;
+  for (const k of malas) await borrarVerificacion(k);
   if (typeof renderSaldos==='function') renderSaldos();
   render();
-  if (odActivo()) await odSync();
-  toast('Conciliación reparada: '+count+' verificaciones con diferencia removidas.');
+  autoSave();
+  toast('Se quitaron '+malas.length+' verificaciones en rojo; los movimientos quedaron intactos.');
 }
 
 async function autoAjustarPresupuestosExcedidos(){
@@ -5096,8 +5108,7 @@ async function inspectorEditarVer(key, valActual, fechaActual){
   const nFecha = prompt('Escribí la fecha de la verificación (YYYY-MM-DD):', fechaActual || todayISO());
   if (nFecha === null) return;
   const v = parseFloat(nVal.replace(/[^0-9.-]/g,'')) || 0;
-  VER[key] = { v, fecha: nFecha, propio: key.endsWith(':propio') };
-  await DB.put('ver', { b: key, ...VER[key] });
+  await guardarVerificacion(key, v, nFecha, key.endsWith(':propio'));
   armarBolsas();
   if (typeof renderSaldos==='function') renderSaldos();
   render();
@@ -5108,8 +5119,7 @@ async function inspectorEditarVer(key, valActual, fechaActual){
 
 async function inspectorBorrarVer(key){
   if (!confirm('¿Eliminar la verificación de '+key+' de la base de datos?')) return;
-  delete VER[key];
-  await DB.del('ver', key);
+  await borrarVerificacion(key);
   armarBolsas();
   if (typeof renderSaldos==='function') renderSaldos();
   render();
@@ -5551,8 +5561,7 @@ function detalle(id){
     const rec = {id:uuid(), actId:id, fecha:f, valor:vTotal, nota:notaVal, ts:Date.now()};
     VAL.push(rec); await DB.put('val', rec);
     if (a.bolsa && BOLSA[a.bolsa]){
-      VER[a.bolsa] = {v: vTotal / trmDe(cur), fecha: f};
-      await DB.put('ver', {b:a.bolsa, v: VER[a.bolsa].v, fecha: f});
+      await guardarVerificacion(a.bolsa, vTotal / trmDe(cur), f, false);
     }
     detalle(id); renderAct(); autoSave(); toast('Valoración guardada');
   };
@@ -5636,8 +5645,8 @@ async function abrirCotizadorTrii(a){
   VAL.push(rec); await DB.put('val', rec);
   
   if (a.bolsa && BOLSA[a.bolsa]){
-    VER[a.bolsa] = {v: valCOP / trmDe(monedaDe(a.bolsa)), fecha: todayISO()};
-    await DB.put('ver', {b:a.bolsa, v: VER[a.bolsa].v, fecha: todayISO()});
+    await guardarVerificacion(a.bolsa,
+      valCOP / trmDe(monedaDe(a.bolsa)), todayISO(), false);
   }
   
   detalle(a.id); renderAct(); autoSave();
@@ -6092,9 +6101,25 @@ function wizResumen(){
    registres en la app.
    ================================================================= */
 let VER = {};                 /* saldos verificados: bolsa -> {v, fecha} */
+const verActual = k => {
+  const v = VER[k];
+  return v && !v.borrado ? v : null;
+};
+async function guardarVerificacion(clave, v, fecha, propio){
+  const rec = {v, fecha, propio:!!propio, ts:Date.now(), borrado:null};
+  VER[clave] = rec;
+  await DB.put('ver', {b:clave, ...rec});
+  return rec;
+}
+async function borrarVerificacion(clave){
+  const anterior = VER[clave] || {};
+  const ahora = Date.now();
+  const rec = {v:null, fecha:todayISO(), propio:!!anterior.propio,
+    ts:ahora, borrado:ahora};
+  VER[clave] = rec;
+  await DB.put('ver', {b:clave, ...rec});
+}
 
-let BOLSAS = [];                    /* seed + bolsillos propios, con ediciones */
-const BOLSA = {};
 function armarBolsas(){
   BOLSAS = SS.bolsas.map(b=>({...b}));
   for (const x of (CFG.bolsasExtra||[])) if (!BOLSAS.some(b=>b.b===x.b)) BOLSAS.push({...x});
@@ -6145,31 +6170,30 @@ function deltaLocal(nb, hasta){
   const info = BOLSA[nb] || {tipo:'Electronico'};
   for (const m of MOV){
     if (m.borrado) continue;
+    /* La apertura ya representa la realidad al corte. Incluir movimientos
+       retroactivos de ese día o anteriores volvería a contarlos. */
+    if (SS && SS.corte && m.fecha <= SS.corte) continue;
     if (hasta && m.fecha > hasta) continue;
 
-    const bEfectiva = (m.bolsa && esPadre(m.bolsa)) ? bolsaHoja(m.bolsa) : m.bolsa;
-    const deEfectiva = (m.de && esPadre(m.de)) ? bolsaHoja(m.de) : m.de;
-    const aEfectiva = (m.a && esPadre(m.a)) ? bolsaHoja(m.a) : m.a;
-
     if (m.tipo==='traslado'){
-      if (m.de===nb || deEfectiva===nb) d -= m.deOrig;
-      if (m.a ===nb || aEfectiva ===nb) d += m.aOrig;
+      if (m.de===nb) d -= m.deOrig;
+      if (m.a ===nb) d += m.aOrig;
       continue;
     }
     const v = m.valorOrig != null ? m.valorOrig : m.valor;
     const esIng = !!(RB[m.r] && RB[m.r].nat === 'Ingreso');
     if (info.tipo === 'Deuda'){
-      if (m.bolsa === nb || bEfectiva === nb) d += v;
+      if (m.bolsa === nb) d += v;
       if (m.r === nb)     d -= v;
     } else if (info.tipo === 'Prestado'){
       if (m.r === nb)     d += v;
-      if (m.bolsa === nb || bEfectiva === nb) d += (esIng ? 1 : -1) * v;
+      if (m.bolsa === nb) d += (esIng ? 1 : -1) * v;
     } else if (nb === 'Caja'){
-      if (m.bolsa === 'Caja' || bEfectiva === 'Caja' || m.r === 'Retiro' || m.r === 'Consignación'){
+      if (m.bolsa === 'Caja' || m.r === 'Retiro' || m.r === 'Consignación'){
         const mas = (m.r === 'Retiro') || (esIng && m.r !== 'Consignación');
         d += (mas ? 1 : -1) * v;
       }
-    } else if (m.bolsa === nb || bEfectiva === nb){
+    } else if (m.bolsa === nb){
       d += (esIng ? 1 : -1) * v;
     }
   }
@@ -6259,8 +6283,8 @@ function renderBolsasJerarquia(filas, tot){
           return filaM + hs.map(h=>{
               const sp = saldoPropio(h.b);
               return fila({...h, s:sp, cop:enPesos(h.b,sp),
-                           ver:(VER[h.b]||{}).v ?? null, verF:(VER[h.b]||{}).fecha,
-                           dif: VER[h.b]!=null ? sp-VER[h.b].v : null}, true);
+                           ver:(verActual(h.b)||{}).v ?? null, verF:(verActual(h.b)||{}).fecha,
+                           dif: verActual(h.b) ? sp-verActual(h.b).v : null}, true);
             }).join('');
         })() : '');
   };
@@ -6279,7 +6303,7 @@ function renderSaldos(){
   const filas = BOLSAS.filter(b=>!b.padre).map(b=>{
     const s = saldoDe(b.b);
     const cop = enPesos(b.b, s);
-    const v = VER[b.b];
+    const v = verActual(b.b);
     return {...b, s, cop, ver: v ? v.v : null, verF: v ? v.fecha : null,
             dif: v ? s - v.v : null};
   }).filter(x => Math.abs(x.s) > 0.5 || x.ver != null);
@@ -6366,7 +6390,8 @@ async function guardarBolsa(){
     moneda: $('#bedMoneda').value,
     saldo:  +$('#bedSaldo').value || 0,
     nota:   $('#bedNota').value.trim(),
-    padre:  padre
+    padre:  padre,
+    _ts:    Date.now()
   };
   await setCfg('bolsasEdit', ed);
   cerrarBed(); renderBolsas(); render(); autoSave();
@@ -6381,7 +6406,7 @@ async function borrarBolsa(){
       !confirm(`${nomB(nb)} tiene ${money(enPesos(nb,s))}. Al eliminarla ese saldo `
               +`desaparece de la vista. ¿Seguro?`)) return;
   const ed = {...(CFG.bolsasEdit||{})};
-  ed[nb] = {borrada:true};
+  ed[nb] = {borrada:true, _ts:Date.now()};
   await setCfg('bolsasEdit', ed);
   cerrarBed(); renderBolsas(); render(); autoSave();
   toast(nomB(nb)+' eliminada');
@@ -6406,7 +6431,7 @@ async function nuevoBolsillo(){
     +'\nCancelar: el bolsillo nace con ese saldo como plata nueva.');
   const extra = [...(CFG.bolsasExtra||[]),
     {b:n, tipo:p.tipo||'Electronico', grupo:p.grupo, saldo:traslado?0:s,
-     moneda:p.moneda||'COP', padre:p.b}];
+     moneda:p.moneda||'COP', padre:p.b, _ts:Date.now()}];
   await setCfg('bolsasExtra', extra);
   armarBolsas();
   if (traslado){
@@ -6808,11 +6833,11 @@ async function sembrar(){
   /* Los saldos de apertura salen de la columna "Saldo Verificado" del Excel:
      son los que ya estaban cuadrados contra el banco al corte. Sembrarlos
      como verificaciones deja el semáforo vivo desde el primer día. */
-  if (!Object.keys(VER).length && SS && SS.bolsas){
+  if (!Object.keys(VER).some(k=>verActual(k)) && SS && SS.bolsas){
     for (const b of SS.bolsas){
       if (Math.abs(b.saldo) < 0.005) continue;
-      VER[b.b] = {v:b.saldo, fecha:SS.corte};
-      await DB.put('ver', {b:b.b, v:b.saldo, fecha:SS.corte});
+      VER[b.b] = {v:b.saldo, fecha:SS.corte, propio:false, ts:0, borrado:null};
+      await DB.put('ver', {b:b.b, ...VER[b.b]});
     }
   }
   /* activos, flujos, valoraciones y objetivos solo se siembran una vez */
@@ -6849,6 +6874,7 @@ async function guardarBase(d, subir){
   if (!d || !d.seed || !d.hist) throw new Error('el archivo no tiene la forma esperada');
   await DB.put('cfg', {k:'base', v:d});
   montar(d);
+  armarBolsas();
   if (!ym) ym = ymOf(new Date());
   await sembrar();
   if (view==='vacio') view='home';
@@ -7247,7 +7273,7 @@ function verClave(nb, forcePropio){
 }
 function semaforo(nb, forcePropio){
   const clave = verClave(nb, forcePropio);
-  const v = VER[clave];
+  const v = verActual(clave);
   if (!v) return {st:'gris', et:'sin verificar', dif:null};
   const hs = hijos(nb);
   const esProp = !!forcePropio;
@@ -7413,8 +7439,7 @@ function bsaPintar(){
     if (t === '' || t == null) { toast('Escribí un valor', true); return; }
     const vParsed = parseMonto(t);
     const clave = verClave(nb, esPropio);
-    VER[clave] = {v: vParsed, fecha:todayISO(), propio: esPropio};
-    await DB.put('ver', {b:clave, ...VER[clave]});
+    await guardarVerificacion(clave, vParsed, todayISO(), esPropio);
     const act = actDeBolsa(nb);
     if (act && !esPropio){
       const valCOP = Math.round(vParsed * trmDe(cur));
@@ -7427,7 +7452,7 @@ function bsaPintar(){
   };
   $('#bsaBorrarVer').onclick = async () => {
     const clave = verClave(nb, esPropio);
-    delete VER[clave]; await DB.del('ver', clave);
+    await borrarVerificacion(clave);
     bsaPintar(); renderSaldos(); autoSave(); toast('Verificación quitada');
   };
   const mm = $$real('#bsaModo');
@@ -7505,9 +7530,9 @@ function renderConcil(){
     if (!esPadre(b.b)) {
       est.push({ b: b.b, isPropio: false, ...semaforo(b.b, false) });
     } else {
-      if (VER[b.b + ':propio']) {
+      if (verActual(b.b + ':propio')) {
         est.push({ b: b.b, isPropio: true, ...semaforo(b.b, true) });
-      } else if (VER[b.b]) {
+      } else if (verActual(b.b)) {
         est.push({ b: b.b, isPropio: false, ...semaforo(b.b, false) });
       }
     }
@@ -7580,45 +7605,41 @@ function abrirInspectorBD(bolsaInicial){
     const info = BOLSA[selBolsa] || {tipo:'Electronico'};
     const cur = info.moneda || 'COP';
     const apertura = info.saldo || 0;
-    const ver = VER[selBolsa] || VER[selBolsa + ':propio'];
+    const ver = verActual(selBolsa) || verActual(selBolsa + ':propio');
 
     /* Recopilar movimientos que afectan esta bolsa o bolsillo */
     const filas = [];
     for (const m of MOV){
       if (m.borrado) continue;
+      if (SS && SS.corte && m.fecha <= SS.corte) continue;
       let efecto = 0, motivo = '';
-      const bHoja = bolsaHoja(m.bolsa);
-
       if (m.tipo === 'traslado'){
-        if (m.de === selBolsa || bolsaHoja(m.de) === selBolsa){
+        if (m.de === selBolsa){
           efecto = -(m.deOrig||m.valor); motivo = '→ '+nomB(m.a);
-        } else if (m.a === selBolsa || bolsaHoja(m.a) === selBolsa){
+        } else if (m.a === selBolsa){
           efecto = +(m.aOrig||m.valor); motivo = '← '+nomB(m.de);
         } else continue;
       } else {
         const v = m.valorOrig != null ? m.valorOrig : m.valor;
         const esIng = !!(RB[m.r] && RB[m.r].nat === 'Ingreso');
         if (info.tipo === 'Deuda'){
-          if (m.bolsa === selBolsa || bHoja === selBolsa){ efecto = +v; motivo = m.r+' (cargo)'; }
+          if (m.bolsa === selBolsa){ efecto = +v; motivo = m.r+' (cargo)'; }
           else if (m.r === selBolsa){ efecto = -v; motivo = m.r+' (abono)'; }
           else continue;
         } else if (info.tipo === 'Prestado'){
           if (m.r === selBolsa){ efecto = +v; motivo = m.r+' (retorno)'; }
-          else if (m.bolsa === selBolsa || bHoja === selBolsa){ efecto = (esIng?1:-1)*v; motivo = m.r; }
+          else if (m.bolsa === selBolsa){ efecto = (esIng?1:-1)*v; motivo = m.r; }
           else continue;
         } else if (selBolsa === 'Caja'){
-          if (m.bolsa==='Caja' || bHoja==='Caja' || m.r==='Retiro' || m.r==='Consignación'){
+          if (m.bolsa==='Caja' || m.r==='Retiro' || m.r==='Consignación'){
             const mas = (m.r==='Retiro') || (esIng && m.r!=='Consignación');
             efecto = (mas?1:-1)*v;
             motivo = m.r;
           } else continue;
         } else {
-          if (m.bolsa === selBolsa || bHoja === selBolsa){
+          if (m.bolsa === selBolsa){
             efecto = (esIng?1:-1)*v;
             motivo = m.r;
-            if (m.bolsa !== selBolsa && bHoja === selBolsa){
-              motivo += ` ⚠️ (en ${nomB(m.bolsa)})`;
-            }
           } else continue;
         }
       }
@@ -7721,7 +7742,7 @@ function abrirInspectorBD(bolsaInicial){
         if (nuevo === null || nuevo.trim() === '') return;
         const nVal = parseMonto(nuevo);
         const ed = { ...(CFG.bolsasEdit || {}) };
-        ed[selBolsa] = { ...(ed[selBolsa] || {}), saldo: nVal };
+        ed[selBolsa] = { ...(ed[selBolsa] || {}), saldo: nVal, _ts:Date.now() };
         await setCfg('bolsasEdit', ed);
         armarBolsas();
         pintarInspector();
@@ -8346,7 +8367,7 @@ $('#btnOdCon').onclick = odConectar;
 $('#btnOdSync').onclick = () => odSync();
 $('#btnOdReemplazar').onclick = reemplazarBaseOneDrive;
 $('#btnInspectorBD').onclick = abrirInspectorBD;
-$('#btnRepararConc').onclick = autoRepararConciliacion;
+$('#btnRepararConc').onclick = limpiarVerificacionesDescuadradas;
 $('#btnCalibrarPto').onclick = autoAjustarPresupuestosExcedidos;
 $('#btnOdOut').onclick = odDesconectar;
 $('#btnOdBase').onclick = async () => {
@@ -8492,26 +8513,13 @@ async function setCfg(k, v){
   await DB.put('cfg', { k, v });
 }
 
-async function autoRepararConciliacion(){
+async function sanearPersistencia(){
   let arreglados = 0;
-  
   const vers = await DB.all('ver');
-  const verKeys = vers.map(x => x.b);
   for (const v of vers){
-    if (v && (isNaN(v.v) || Math.abs(v.v) > 1e11)){
-      await DB.del('ver', v.b);
-      delete VER[v.b];
+    if (!v || (!v.borrado && (typeof v.v !== 'number' || !Number.isFinite(v.v)))){
+      if (v && v.b) await DB.del('ver', v.b);
       arreglados++;
-    }
-  }
-  for (const k of verKeys){
-    if (k.endsWith(':propio')){
-      const padre = k.replace(':propio', '');
-      if (verKeys.includes(padre)){
-        await DB.del('ver', padre);
-        delete VER[padre];
-        arreglados++;
-      }
     }
   }
 
@@ -8519,8 +8527,9 @@ async function autoRepararConciliacion(){
   if (cfg && cfg.v){
     let cambiado = false;
     for (const b in cfg.v){
-      if (cfg.v[b] && Math.abs(cfg.v[b].saldo) > 1e11) {
-        cfg.v[b].saldo = 0;
+      const saldo = cfg.v[b] && cfg.v[b].saldo;
+      if (saldo != null && (typeof saldo !== 'number' || !Number.isFinite(saldo))) {
+        delete cfg.v[b].saldo;
         cambiado = true;
       }
     }
@@ -8531,17 +8540,19 @@ async function autoRepararConciliacion(){
   if (base && base.v && base.v.saldos && base.v.saldos.bolsas){
     let cambiado = false;
     base.v.saldos.bolsas.forEach(b => {
-      if (Math.abs(b.saldo) > 1e11) { b.saldo = 0; cambiado = true; }
+      if (typeof b.saldo !== 'number' || !Number.isFinite(b.saldo)) {
+        b.saldo = 0; cambiado = true;
+      }
     });
     if (cambiado) { await DB.put('cfg', base); arreglados++; }
   }
 
-  if (arreglados > 0 && typeof render === 'function') render();
+  return arreglados;
 }
 
 /* =================== arranque =================== */
 async function boot(){
-  await autoRepararConciliacion();
+  await sanearPersistencia();
   ym = ymOf(new Date());
   const cfgs = await DB.all('cfg');
   cfgs.forEach(c=>{
@@ -8553,7 +8564,10 @@ async function boot(){
     else if (c.k==='bolsasEdit'){
       const ed = c.v || {};
       for (const b in ed){
-        if (ed[b] && Math.abs(ed[b].saldo) > 1e11) ed[b].saldo = 0;
+        if (ed[b] && ed[b].saldo != null
+            && (typeof ed[b].saldo !== 'number' || !Number.isFinite(ed[b].saldo))) {
+          delete ed[b].saldo;
+        }
       }
       CFG[c.k] = ed;
     }
@@ -8574,6 +8588,7 @@ async function boot(){
       if (RB[n] && (NAT_PTO.includes(nat) || nat === 'Ingreso')) RB[n].nat = nat;
     }
   }
+  if (hayDatos()) armarBolsas();
   MOV = await DB.all('mov');
   /* activos: la semilla se carga una vez; después manda lo que hay en la base */
   ACT = await DB.all('act'); FLU = await DB.all('flu'); VAL = await DB.all('val');
@@ -8588,19 +8603,25 @@ async function boot(){
   }
   (await DB.all('pto')).forEach(p=>{ PTO[p.k]=p.v; PTO_TS[p.k]=p.ts||0; });
   OBJ = await DB.all('obj');
-  (await DB.all('ver')).forEach(v => {
+  for (const v of (await DB.all('ver'))){
     let key = v.b;
-    if (v.propio && esPadre(v.b) && !v.b.endsWith(':propio')) {
+    if (!v.borrado && v.propio && esPadre(v.b) && !v.b.endsWith(':propio')) {
       key = v.b + ':propio';
-      DB.del('ver', v.b);
-      DB.put('ver', { b: key, v: v.v, fecha: v.fecha, propio: true });
+      const ahora = Date.now();
+      const bajaAnterior = {v:null, fecha:todayISO(), propio:false,
+        ts:ahora, borrado:ahora};
+      VER[v.b] = bajaAnterior;
+      await DB.put('ver', {b:v.b, ...bajaAnterior});
+      await DB.put('ver', {b:key, v:v.v, fecha:v.fecha, propio:true,
+        ts:v.ts||ahora, borrado:null});
     }
-    if (v && v.v != null && !isNaN(v.v) && Math.abs(v.v) < 1e11){
-      VER[key] = { v: v.v, fecha: v.fecha, propio: !!v.propio };
+    if (v && (v.borrado || (typeof v.v === 'number' && Number.isFinite(v.v)))){
+      VER[key] = { v:v.v, fecha:v.fecha, propio:!!v.propio,
+        ts:v.ts||v.borrado||0, borrado:v.borrado||null };
     } else {
-      DB.del('ver', v.b);
+      await DB.del('ver', v.b);
     }
-  });
+  }
   const fh = await DB.get('fs','handle');
   if (fh && fh.v){ try {
     if (await fh.v.queryPermission({mode:'readwrite'})==='granted') FH=fh.v;
