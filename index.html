@@ -8488,27 +8488,54 @@ async function setCfg(k, v){
 
 async function autoRepararConciliacion(){
   let arreglados = 0;
-  for (const [k, v] of Object.entries(VER)){
-    if (!v || isNaN(v.v) || Math.abs(v.v) > 1e11){
-      delete VER[k];
-      await DB.del('ver', k);
+  
+  const vers = await DB.all('ver');
+  const verKeys = vers.map(x => x.b);
+  for (const v of vers){
+    if (v && (isNaN(v.v) || Math.abs(v.v) > 1e11)){
+      await DB.del('ver', v.b);
+      delete VER[v.b];
       arreglados++;
     }
   }
-  for (const b of BOLSAS){
-    if (esPadre(b.b) && VER[b.b] && VER[b.b + ':propio']){
-      delete VER[b.b];
-      await DB.del('ver', b.b);
-      arreglados++;
+  for (const k of verKeys){
+    if (k.endsWith(':propio')){
+      const padre = k.replace(':propio', '');
+      if (verKeys.includes(padre)){
+        await DB.del('ver', padre);
+        delete VER[padre];
+        arreglados++;
+      }
     }
   }
-  render();
-  autoSave();
-  toast(arreglados > 0 ? `Conciliaciones limpiadas (${arreglados})` : 'Conciliaciones correctas');
+
+  const cfg = await DB.get('cfg', 'bolsasEdit');
+  if (cfg && cfg.v){
+    let cambiado = false;
+    for (const b in cfg.v){
+      if (cfg.v[b] && Math.abs(cfg.v[b].saldo) > 1e11) {
+        cfg.v[b].saldo = 0;
+        cambiado = true;
+      }
+    }
+    if (cambiado) { await DB.put('cfg', cfg); arreglados++; }
+  }
+
+  const base = await DB.get('cfg', 'base');
+  if (base && base.v && base.v.saldos && base.v.saldos.bolsas){
+    let cambiado = false;
+    base.v.saldos.bolsas.forEach(b => {
+      if (Math.abs(b.saldo) > 1e11) { b.saldo = 0; cambiado = true; }
+    });
+    if (cambiado) { await DB.put('cfg', base); arreglados++; }
+  }
+
+  if (arreglados > 0 && typeof render === 'function') render();
 }
 
 /* =================== arranque =================== */
 async function boot(){
+  await autoRepararConciliacion();
   ym = ymOf(new Date());
   const cfgs = await DB.all('cfg');
   cfgs.forEach(c=>{
