@@ -4874,7 +4874,13 @@ async function fusionar(data, silencio){
   if (data.cfg){
     let cambioCfg = false;
     if (data.cfg.bolsasEdit){
-      const ed = {...(CFG.bolsasEdit||{}), ...data.cfg.bolsasEdit};
+      const ed = {...(CFG.bolsasEdit||{})};
+      for (const [k, v] of Object.entries(data.cfg.bolsasEdit)){
+        const loc = ed[k];
+        if (!loc || (v.ts || 0) >= (loc.ts || 0)) {
+          ed[k] = {...(loc||{}), ...v};
+        }
+      }
       await setCfg('bolsasEdit', ed); cambioCfg = true;
     }
     if (data.cfg.bolsasExtra){
