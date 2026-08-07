@@ -1606,7 +1606,7 @@ input[type=text],input[type=number],input[type=date],select{
 <div id="toast"></div>
 <script>
 'use strict';
-const VERSION = '2026.08.06-13';   /* subí esto en cada cambio publicado */
+const VERSION = '2026.08.06-14';   /* subí esto en cada cambio publicado */
 /* ===================================================================
    Diario · Presupuesto — PWA local-first
    Los datos viven en IndexedDB en este dispositivo. Nada sale de acá
@@ -2528,7 +2528,7 @@ async function editarVigencia(r){
     toast('Fechas inválidas', true); return;
   }
   const sob = {...(CFG.sobres||{})};
-  sob[r] = {desde:d, hasta:h};
+  sob[r] = {desde:d, hasta:h, _ts:Date.now()};
   await setCfg('sobres', sob);
   render(); autoSave();
   toast(`«${r}»: ${mesesEntre(d,h)} meses de vigencia`);
@@ -4789,7 +4789,8 @@ function snapshot(){
       bolsasEdit: CFG.bolsasEdit || {},
       bolsasExtra: CFG.bolsasExtra || [],
       rubrosExtra: CFG.rubrosExtra || [],
-      rubrosNatEdit: CFG.rubrosNatEdit || {}
+      rubrosNatEdit: CFG.rubrosNatEdit || {},
+      sobres: CFG.sobres || {}
     }
   };
 }
@@ -4942,6 +4943,21 @@ async function fusionar(data, silencio){
         if (RB[n] && (NAT_PTO.includes(nat) || nat === 'Ingreso')) RB[n].nat = nat;
       }
     }
+    if (data.cfg.sobres){
+      const ed = {...(CFG.sobres||{})};
+      let cambioSobres = false;
+      for (const [n, remoto] of Object.entries(data.cfg.sobres)){
+        const local = ed[n];
+        /* Los registros históricos no tenían _ts. En empate gana lo remoto:
+           así una instalación que nunca exportó sobres puede sembrar al resto. */
+        if (!local || (remoto._ts||0) >= (local._ts||0)){
+          if (!local || local.desde!==remoto.desde || local.hasta!==remoto.hasta
+              || (local._ts||0)!==(remoto._ts||0)) cambioSobres = true;
+          ed[n] = remoto;
+        }
+      }
+      if (cambioSobres){ await setCfg('sobres', ed); cambioCfg = true; }
+    }
     if (cambioCfg) armarBolsas();
   }
   render();
@@ -4999,6 +5015,7 @@ async function reemplazarTodo(d){
     if (d.cfg.bolsasExtra) await setCfg('bolsasExtra', d.cfg.bolsasExtra);
     if (d.cfg.rubrosExtra) await setCfg('rubrosExtra', d.cfg.rubrosExtra);
     if (d.cfg.rubrosNatEdit) await setCfg('rubrosNatEdit', d.cfg.rubrosNatEdit);
+    if (d.cfg.sobres) await setCfg('sobres', d.cfg.sobres);
   }
 
   armarBolsas();
@@ -8730,7 +8747,7 @@ async function boot(){
     navigator.serviceWorker.addEventListener('controllerchange', () => {
       if (!refreshing) { refreshing = true; window.location.reload(); }
     });
-    navigator.serviceWorker.register('sw.js?v=42').then(reg=>{
+    navigator.serviceWorker.register('sw.js?v=43').then(reg=>{
       reg.addEventListener('updatefound', ()=>{
         const nuevo = reg.installing;
         if (!nuevo) return;
