@@ -4,7 +4,7 @@
    veces ni borrar nada a mano. Los archivos que no cambian (iconos,
    manifiesto) sí van cache-first, que es más rápido.
    Los datos NUNCA pasan por acá: viven en IndexedDB, en el dispositivo. */
-const V = 'diario-v34';
+const V = 'diario-v35';
 const ESTATICOS = ['./manifest.webmanifest', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', e => {

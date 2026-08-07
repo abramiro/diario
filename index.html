@@ -1797,6 +1797,22 @@ const money = n => {
 };
 const uuid = () => (crypto.randomUUID ? crypto.randomUUID()
   : 'x'+Date.now().toString(36)+Math.random().toString(36).slice(2,10));
+const parseMonto = valStr => {
+  if (valStr == null) return 0;
+  let str = String(valStr).trim();
+  if (!str) return 0;
+  if (str.includes(',') && str.includes('.')){
+    if (str.lastIndexOf(',') > str.lastIndexOf('.')){
+      str = str.replace(/\./g, '').replace(',', '.');
+    } else {
+      str = str.replace(/,/g, '');
+    }
+  } else if (str.includes(',')){
+    str = str.replace(',', '.');
+  }
+  const n = parseFloat(str);
+  return isNaN(n) ? 0 : n;
+};
 const pad2 = n => String(n).padStart(2,'0');
 const sinTilde = t => (t||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
 const ymOf = d => d.getFullYear()+'-'+pad2(d.getMonth()+1);
@@ -6124,27 +6140,30 @@ function deltaLocal(nb, hasta){
   for (const m of MOV){
     if (m.borrado) continue;
     if (hasta && m.fecha > hasta) continue;
+
+    const bEfectiva = (m.bolsa && esPadre(m.bolsa)) ? bolsaHoja(m.bolsa) : m.bolsa;
+    const deEfectiva = (m.de && esPadre(m.de)) ? bolsaHoja(m.de) : m.de;
+    const aEfectiva = (m.a && esPadre(m.a)) ? bolsaHoja(m.a) : m.a;
+
     if (m.tipo==='traslado'){
-      if (m.de===nb) d -= m.deOrig;
-      if (m.a ===nb) d += m.aOrig;
+      if (m.de===nb || deEfectiva===nb) d -= m.deOrig;
+      if (m.a ===nb || aEfectiva ===nb) d += m.aOrig;
       continue;
     }
     const v = m.valorOrig != null ? m.valorOrig : m.valor;
     const esIng = !!(RB[m.r] && RB[m.r].nat === 'Ingreso');
     if (info.tipo === 'Deuda'){
-      if (m.bolsa === nb) d += v;
+      if (m.bolsa === nb || bEfectiva === nb) d += v;
       if (m.r === nb)     d -= v;
     } else if (info.tipo === 'Prestado'){
       if (m.r === nb)     d += v;
-      /* un ingreso acreditado al préstamo (intereses) lo hace crecer;
-         un gasto pagado desde él lo reduce */
-      if (m.bolsa === nb) d += (esIng ? 1 : -1) * v;
+      if (m.bolsa === nb || bEfectiva === nb) d += (esIng ? 1 : -1) * v;
     } else if (nb === 'Caja'){
-      if (m.bolsa === 'Caja' || m.r === 'Retiro' || m.r === 'Consignación'){
+      if (m.bolsa === 'Caja' || bEfectiva === 'Caja' || m.r === 'Retiro' || m.r === 'Consignación'){
         const mas = (m.r === 'Retiro') || (esIng && m.r !== 'Consignación');
         d += (mas ? 1 : -1) * v;
       }
-    } else if (m.bolsa === nb){
+    } else if (m.bolsa === nb || bEfectiva === nb){
       d += (esIng ? 1 : -1) * v;
     }
   }
@@ -7385,13 +7404,14 @@ function bsaPintar(){
 
   $('#bsaGuardarVer').onclick = async () => {
     const t = $('#bsaVer').value;
-    if (t==='') { toast('Escribí un valor', true); return; }
+    if (t === '' || t == null) { toast('Escribí un valor', true); return; }
+    const vParsed = parseMonto(t);
     const clave = verClave(nb, esPropio);
-    VER[clave] = {v:+t||0, fecha:todayISO(), propio: esPropio};
+    VER[clave] = {v: vParsed, fecha:todayISO(), propio: esPropio};
     await DB.put('ver', {b:clave, ...VER[clave]});
     const act = actDeBolsa(nb);
     if (act && !esPropio){
-      const valCOP = Math.round((+t||0) * trmDe(cur));
+      const valCOP = Math.round(vParsed * trmDe(cur));
       const rec = {id:uuid(), actId:act.id, fecha:todayISO(), valor:valCOP, nota:'sincronizado desde verificación de bolsa', ts:Date.now()};
       VAL.push(rec); await DB.put('val', rec);
     }
