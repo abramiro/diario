@@ -8481,7 +8481,31 @@ document.addEventListener('keydown', e => {
   else if (e.key==='Backspace') key('del');
   else if (e.key==='Enter') guardar();
   else if (e.key==='Escape') closePad();
-});
+async function setCfg(k, v){
+  CFG[k] = v;
+  await DB.put('cfg', { k, v });
+}
+
+async function autoRepararConciliacion(){
+  let arreglados = 0;
+  for (const [k, v] of Object.entries(VER)){
+    if (!v || isNaN(v.v) || Math.abs(v.v) > 1e11){
+      delete VER[k];
+      await DB.del('ver', k);
+      arreglados++;
+    }
+  }
+  for (const b of BOLSAS){
+    if (esPadre(b.b) && VER[b.b] && VER[b.b + ':propio']){
+      delete VER[b.b];
+      await DB.del('ver', b.b);
+      arreglados++;
+    }
+  }
+  render();
+  autoSave();
+  toast(arreglados > 0 ? `Conciliaciones limpiadas (${arreglados})` : 'Conciliaciones correctas');
+}
 
 /* =================== arranque =================== */
 async function boot(){
@@ -8531,7 +8555,11 @@ async function boot(){
       DB.del('ver', v.b);
       DB.put('ver', { b: key, v: v.v, fecha: v.fecha, propio: true });
     }
-    VER[key] = { v: v.v, fecha: v.fecha, propio: !!v.propio };
+    if (v && v.v != null && !isNaN(v.v) && Math.abs(v.v) < 1e11){
+      VER[key] = { v: v.v, fecha: v.fecha, propio: !!v.propio };
+    } else {
+      DB.del('ver', v.b);
+    }
   });
   const fh = await DB.get('fs','handle');
   if (fh && fh.v){ try {
