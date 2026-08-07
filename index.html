@@ -1606,7 +1606,7 @@ input[type=text],input[type=number],input[type=date],select{
 <div id="toast"></div>
 <script>
 'use strict';
-const VERSION = '2026.08.06-12';   /* subí esto en cada cambio publicado */
+const VERSION = '2026.08.06-13';   /* subí esto en cada cambio publicado */
 /* ===================================================================
    Diario · Presupuesto — PWA local-first
    Los datos viven en IndexedDB en este dispositivo. Nada sale de acá
@@ -2888,13 +2888,28 @@ function preEstado(p){
 /* el rubro que recoge rendimientos de inversión; se crea si no está */
 async function rubroRend(){
   const N = 'Rendimientos';
-  if (RB[N]) return N;
+  if (RB[N]){
+    /* Estos movimientos ya llevan signo (ganancia positiva, pérdida negativa).
+       Su naturaleza debe ser ingreso en todos los dispositivos. */
+    if (RB[N].nat !== 'Ingreso'){
+      RB[N].nat = 'Ingreso';
+      await setCfg('rubrosNatEdit', {...(CFG.rubrosNatEdit||{}), [N]:'Ingreso'});
+    }
+    return N;
+  }
   const r = {n:N, cat:'Ingreso', nat:'Ingreso', pto:0, med6:0, med12:0, cv:null,
     n12:0, tend:null, a:[0,0,0,0], anual:0, uso:1, bolsa:S.bolsas[0],
     aviso:'', nuevo:true};
   S.rubros.unshift(r); RB[N]=r;
-  await DB.put('cfg',{k:'rubrosExtra', v:S.rubros.filter(x=>x.nuevo)});
+  const extra = [...(CFG.rubrosExtra||[])];
+  if (!extra.some(x=>x.n===N)) extra.push({...r, _ts:Date.now()});
+  await setCfg('rubrosExtra', extra);
   return N;
+}
+
+/* Compatibilidad con movimientos creados antes de persistir el rubro. */
+function esIngresoRubro(n){
+  return n === 'Rendimientos' || !!(RB[n] && RB[n].nat === 'Ingreso');
 }
 
 /* asegura que un rubro exista; si no está, lo crea con su categoría y naturaleza */
@@ -4911,13 +4926,21 @@ async function fusionar(data, silencio){
       const ids = new Set((CFG.rubrosExtra||[]).map(r=>r.n));
       let ed = [...(CFG.rubrosExtra||[])];
       for (const r of data.cfg.rubrosExtra){
-        if (!ids.has(r.n)){ ed.push(r); cambioCfg = true; }
+        if (!ids.has(r.n)){ ed.push(r); ids.add(r.n); cambioCfg = true; }
+        /* Aplicar de inmediato: esperar al próximo arranque dejaba al móvil
+           calculando movimientos con un catálogo RB desactualizado. */
+        if (S && r && r.n && !RB[r.n]){
+          const copia = {...r}; S.rubros.unshift(copia); RB[copia.n] = copia;
+        }
       }
       if (cambioCfg) await setCfg('rubrosExtra', ed);
     }
     if (data.cfg.rubrosNatEdit){
       const ed = {...(CFG.rubrosNatEdit||{}), ...data.cfg.rubrosNatEdit};
       await setCfg('rubrosNatEdit', ed); cambioCfg = true;
+      for (const [n, nat] of Object.entries(ed)){
+        if (RB[n] && (NAT_PTO.includes(nat) || nat === 'Ingreso')) RB[n].nat = nat;
+      }
     }
     if (cambioCfg) armarBolsas();
   }
@@ -6188,7 +6211,7 @@ function deltaLocal(nb, hasta){
       continue;
     }
     const v = m.valorOrig != null ? m.valorOrig : m.valor;
-    const esIng = !!(RB[m.r] && RB[m.r].nat === 'Ingreso');
+    const esIng = esIngresoRubro(m.r);
     if (info.tipo === 'Deuda'){
       if (m.bolsa === nb) d += v;
       if (m.r === nb)     d -= v;
@@ -6532,7 +6555,7 @@ function exportarCSV(){
         m.obs?m.obs+' · traslado desde '+nomB(m.de):'traslado desde '+nomB(m.de)]);
     } else {
       const r=RB[m.r]||{};
-      rows.push([Y,Mo,m.fecha,m.hora||'',m.r,r.cat||'', r.nat==='Ingreso'?'VERDADERO':'FALSO',
+      rows.push([Y,Mo,m.fecha,m.hora||'',m.r,r.cat||'', esIngresoRubro(m.r)?'VERDADERO':'FALSO',
         nomB(m.bolsa), num(m.valorOrig!=null?m.valorOrig:m.valor), m.obs||'']);
     }
   }
@@ -6591,7 +6614,7 @@ function rehidratar(){
 function universo(){
   const loc = MOV.filter(m=>vivo(m) && m.tipo!=='traslado').map(m=>({
     id:m.id, f:m.fecha, r:m.r, c:(RB[m.r]||{}).cat||'', b:m.bolsa,
-    v:m.valor, o:m.obs||'', i:(RB[m.r]||{}).nat==='Ingreso'?1:0,
+    v:m.valor, o:m.obs||'', i:esIngresoRubro(m.r)?1:0,
     m:m.moneda||'COP', vo:m.valorOrig!=null?m.valorOrig:m.valor, src:'app'}));
   const tras = (HFIL.tipo==='todo'||HFIL.tipo==='traslado') ? MOV.filter(m=>vivo(m) && m.tipo==='traslado').map(m=>({
     id:m.id, f:m.fecha, r:'⇄ '+nomB(m.de)+' → '+nomB(m.a), c:'Traslado', b:m.de, de:m.de, a:m.a,
@@ -7631,7 +7654,7 @@ function abrirInspectorBD(bolsaInicial){
         } else continue;
       } else {
         const v = m.valorOrig != null ? m.valorOrig : m.valor;
-        const esIng = !!(RB[m.r] && RB[m.r].nat === 'Ingreso');
+        const esIng = esIngresoRubro(m.r);
         if (info.tipo === 'Deuda'){
           if (m.bolsa === selBolsa){ efecto = +v; motivo = m.r+' (cargo)'; }
           else if (m.r === selBolsa){ efecto = -v; motivo = m.r+' (abono)'; }
@@ -8600,6 +8623,9 @@ async function boot(){
   }
   if (hayDatos()) armarBolsas();
   MOV = await DB.all('mov');
+  /* Repara instalaciones existentes: antes viajaban los movimientos, pero no
+     la definición dinámica de Rendimientos que determina su signo. */
+  if (hayDatos() && MOV.some(m=>!m.borrado && m.r==='Rendimientos')) await rubroRend();
   /* activos: la semilla se carga una vez; después manda lo que hay en la base */
   ACT = await DB.all('act'); FLU = await DB.all('flu'); VAL = await DB.all('val');
   PEN = await DB.all('pen');
@@ -8704,7 +8730,7 @@ async function boot(){
     navigator.serviceWorker.addEventListener('controllerchange', () => {
       if (!refreshing) { refreshing = true; window.location.reload(); }
     });
-    navigator.serviceWorker.register('sw.js?v=41').then(reg=>{
+    navigator.serviceWorker.register('sw.js?v=42').then(reg=>{
       reg.addEventListener('updatefound', ()=>{
         const nuevo = reg.installing;
         if (!nuevo) return;
