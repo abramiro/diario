@@ -1626,7 +1626,7 @@ input[type=text],input[type=number],input[type=date],select{
 <div id="toast"></div>
 <script>
 'use strict';
-const VERSION = '2026.08.14-17';   /* subí esto en cada cambio publicado */
+const VERSION = '2026.08.25-18';   /* subí esto en cada cambio publicado */
 /* ===================================================================
    Diario · Presupuesto — PWA local-first
    Los datos viven en IndexedDB en este dispositivo. Nada sale de acá
@@ -4678,8 +4678,13 @@ function wizNominaPintar(){
 }
 
 async function wizNominaEjecutar(){
-  if (!WN) return;
+  if (!WN || WN.registrando) return;
+  WN.registrando = true;
+  const btn = $$real('#wnEjecutar');
+  if (btn){ btn.disabled = true; btn.textContent = 'Registrando…'; }
   const dt = dtLocal(new Date());
+
+  try {
 
   /* 1. Crear rubros faltantes */
   for (const d of WN.devengos){
@@ -4692,16 +4697,21 @@ async function wizNominaEjecutar(){
   /* 2. Movimientos de Devengos (Ingreso) */
   for (const d of WN.devengos){
     if (!d.n || !d.v) continue;
+    const fecha = WN.ym + '-01';
     const m = {
-      id: genId(),
-      dt: WN.ym + '-01 08:00',
-      rubro: d.n,
+      id: uuid(),
+      fecha,
+      hora: '08:00',
+      dt: fecha + 'T08:00',
+      ym: WN.ym,
+      r: d.n,
       valor: d.v,
       bolsa: WN.bolsaNeto,
       obs: `Devengo nómina ${WN.empresa}${d.cod ? ' [' + d.cod + ']' : ''}`,
       moneda: 'COP',
       tasa: 1,
-      valorOrig: d.v
+      valorOrig: d.v,
+      ts: Date.now()
     };
     MOV.push(m);
     await DB.put('mov', m);
@@ -4710,16 +4720,21 @@ async function wizNominaEjecutar(){
   /* 3. Movimientos de Deducciones (Egreso) */
   for (const d of WN.deducciones){
     if (!d.n || !d.v) continue;
+    const fecha = WN.ym + '-01';
     const m = {
-      id: genId(),
-      dt: WN.ym + '-01 08:05',
-      rubro: d.n,
+      id: uuid(),
+      fecha,
+      hora: '08:05',
+      dt: fecha + 'T08:05',
+      ym: WN.ym,
+      r: d.n,
       valor: d.v,
       bolsa: WN.bolsaNeto,
       obs: `Deducción nómina ${WN.empresa}${d.cod ? ' [' + d.cod + ']' : ''}`,
       moneda: 'COP',
       tasa: 1,
-      valorOrig: d.v
+      valorOrig: d.v,
+      ts: Date.now()
     };
     MOV.push(m);
     await DB.put('mov', m);
@@ -4740,6 +4755,12 @@ async function wizNominaEjecutar(){
   wizNominaCerrar();
   autoSave();
   toast(`Nómina de ${ymLabel(WN.ym)} registrada. Neto: ${money(neto)} depositado en ${nomB(WN.bolsaNeto)}`);
+  } catch(err){
+    console.error('No se pudo registrar la nómina', err);
+    WN.registrando = false;
+    if (btn){ btn.disabled = false; btn.textContent = '⚡ Registrar Nómina'; }
+    toast('No se pudo registrar la nómina. Revisá los datos e intentá nuevamente.', true);
+  }
 }
 
 /* =================== FACTURAS DE SERVICIOS Y TELEFONÍA (JSON) =================== */
