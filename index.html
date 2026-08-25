@@ -1626,7 +1626,7 @@ input[type=text],input[type=number],input[type=date],select{
 <div id="toast"></div>
 <script>
 'use strict';
-const VERSION = '2026.08.25-18';   /* subí esto en cada cambio publicado */
+const VERSION = '2026.08.25-19';   /* subí esto en cada cambio publicado */
 /* ===================================================================
    Diario · Presupuesto — PWA local-first
    Los datos viven en IndexedDB en este dispositivo. Nada sale de acá
@@ -4482,9 +4482,11 @@ let WN = null;
 
 function wizNominaAbrir(){
   const cfgNom = getCfgNomina();
+  const periodo = ym || ymOf(new Date());
   WN = {
     paso: 1,
-    ym: ym || ymOf(new Date()),
+    ym: periodo,
+    fecha: periodo === ymOf(new Date()) ? dtLocal(new Date()).slice(0,10) : periodo + '-01',
     empresa: cfgNom.empresa || 'HITSS COLOMBIA SAS',
     basico: cfgNom.basico || 17443000,
     bolsaNeto: cfgNom.bolsaNeto || (S.bolsas[0] || 'Caja'),
@@ -4519,6 +4521,10 @@ function wizNominaPintar(){
       <div class="f" style="margin-bottom:12px">
         <label>Periodo (Mes)</label>
         <input type="month" id="wnYM" value="${WN.ym}" style="max-width:160px">
+      </div>
+      <div class="f" style="margin-bottom:12px">
+        <label>Fecha de Pago</label>
+        <input type="date" id="wnFecha" value="${WN.fecha}" style="max-width:160px">
       </div>
       <div class="f" style="margin-bottom:12px">
         <label>Empresa / Empleador</label>
@@ -4580,6 +4586,7 @@ function wizNominaPintar(){
 
       <div style="background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:14px">
         <div class="f" style="margin-bottom:6px"><span style="color:var(--tx2)">Periodo</span><b>${ymLabel(WN.ym)}</b></div>
+        <div class="f" style="margin-bottom:6px"><span style="color:var(--tx2)">Fecha de pago</span><b>${fLarga(WN.fecha)}</b></div>
         <div class="f" style="margin-bottom:6px"><span style="color:var(--tx2)">Empresa</span><b>${WN.empresa}</b></div>
         <div class="f" style="margin-bottom:6px"><span style="color:var(--tx2)">Total Devengos</span><b class="mono" style="color:var(--ok)">+${money(totalDev)}</b></div>
         <div class="f" style="margin-bottom:6px"><span style="color:var(--tx2)">Total Deducciones</span><b class="mono" style="color:var(--bad)">-${money(totalDed)}</b></div>
@@ -4601,7 +4608,12 @@ function wizNominaPintar(){
 
   /* Manejo de eventos en cada paso */
   if (paso === 1){
-    const ymInp = $$real('#wnYM'); if (ymInp) ymInp.onchange = () => { WN.ym = ymInp.value; };
+    const ymInp = $$real('#wnYM'); if (ymInp) ymInp.onchange = () => {
+      WN.ym = ymInp.value;
+      WN.fecha = WN.ym === ymOf(new Date()) ? dtLocal(new Date()).slice(0,10) : WN.ym + '-01';
+      const fInp = $$real('#wnFecha'); if (fInp) fInp.value = WN.fecha;
+    };
+    const fechaInp = $$real('#wnFecha'); if (fechaInp) fechaInp.onchange = () => { WN.fecha = fechaInp.value; };
     const empInp = $$real('#wnEmpresa'); if (empInp) empInp.oninput = () => { WN.empresa = empInp.value; };
     const basInp = $$real('#wnBasico'); if (basInp) basInp.oninput = () => { WN.basico = +basInp.value||0; };
     const bolSel = $$real('#wnBolsaNeto'); if (bolSel) bolSel.onchange = () => { WN.bolsaNeto = bolSel.value; };
@@ -4683,6 +4695,7 @@ async function wizNominaEjecutar(){
   const btn = $$real('#wnEjecutar');
   if (btn){ btn.disabled = true; btn.textContent = 'Registrando…'; }
   const dt = dtLocal(new Date());
+  const fecha = WN.fecha || (WN.ym === ymOf(new Date()) ? dt.slice(0,10) : WN.ym + '-01');
 
   try {
 
@@ -4697,7 +4710,6 @@ async function wizNominaEjecutar(){
   /* 2. Movimientos de Devengos (Ingreso) */
   for (const d of WN.devengos){
     if (!d.n || !d.v) continue;
-    const fecha = WN.ym + '-01';
     const m = {
       id: uuid(),
       fecha,
@@ -4720,7 +4732,6 @@ async function wizNominaEjecutar(){
   /* 3. Movimientos de Deducciones (Egreso) */
   for (const d of WN.deducciones){
     if (!d.n || !d.v) continue;
-    const fecha = WN.ym + '-01';
     const m = {
       id: uuid(),
       fecha,
@@ -4754,6 +4765,9 @@ async function wizNominaEjecutar(){
 
   wizNominaCerrar();
   autoSave();
+  HFIL = {...HFIL, rango:'libre', d1:fecha, d2:fecha, cat:'', rub:'',
+    bol:WN.bolsaNeto, q:'nómina', tipo:'todo'};
+  HLIM = 60;
   toast(`Nómina de ${ymLabel(WN.ym)} registrada. Neto: ${money(neto)} depositado en ${nomB(WN.bolsaNeto)}`);
   } catch(err){
     console.error('No se pudo registrar la nómina', err);
@@ -8654,6 +8668,34 @@ async function sanearPersistencia(){
   return arreglados;
 }
 
+/* Las primeras versiones del asistente fechaban todos los movimientos el día
+   1 del periodo, aunque el pago se hubiera registrado semanas después. Eso los
+   enterraba fuera de las primeras filas del Histórico. Recuperamos la fecha
+   local de creación desde ts y subimos el ts para que la corrección sincronice. */
+async function migrarFechasNomina(){
+  const encontrados = [];
+  for (const m of MOV){
+    if (!m || m.borrado || !m.ts || !m.ym || m.fecha !== m.ym + '-01') continue;
+    if (!/^(Devengo|Deducción) nómina\b/i.test(m.obs||'')) continue;
+    const creado = dtLocal(new Date(m.ts));
+    if (creado.slice(0,7) !== m.ym || creado.slice(0,10) === m.fecha) continue;
+    encontrados.push({m, creado});
+  }
+  if (!encontrados.length) return null;
+  const ahora = Date.now();
+  for (let i=0; i<encontrados.length; i++){
+    const {m, creado} = encontrados[i];
+    m.fecha = creado.slice(0,10);
+    m.hora = creado.slice(11,16);
+    m.dt = creado;
+    m.ts = ahora + i;
+    await DB.put('mov', m);
+  }
+  const fechas = encontrados.map(x=>x.creado.slice(0,10)).sort();
+  return {n:encontrados.length, d1:fechas[0], d2:fechas[fechas.length-1],
+    bolsa:encontrados[0].m.bolsa};
+}
+
 /* =================== arranque =================== */
 async function boot(){
   await sanearPersistencia();
@@ -8694,6 +8736,12 @@ async function boot(){
   }
   if (hayDatos()) armarBolsas();
   MOV = await DB.all('mov');
+  const nominaMigrada = await migrarFechasNomina();
+  if (nominaMigrada){
+    HFIL = {...HFIL, rango:'libre', d1:nominaMigrada.d1, d2:nominaMigrada.d2,
+      cat:'', rub:'', bol:nominaMigrada.bolsa||'', q:'nómina', tipo:'todo'};
+    HLIM = 60;
+  }
   /* Repara instalaciones existentes: antes viajaban los movimientos, pero no
      la definición dinámica de Rendimientos que determina su signo. */
   if (hayDatos() && MOV.some(m=>!m.borrado && m.r==='Rendimientos')) await rubroRend();
@@ -8801,7 +8849,7 @@ async function boot(){
     navigator.serviceWorker.addEventListener('controllerchange', () => {
       if (!refreshing) { refreshing = true; window.location.reload(); }
     });
-    navigator.serviceWorker.register('sw.js?v=46').then(reg=>{
+    navigator.serviceWorker.register('sw.js?v=48').then(reg=>{
       reg.addEventListener('updatefound', ()=>{
         const nuevo = reg.installing;
         if (!nuevo) return;
