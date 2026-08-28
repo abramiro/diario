@@ -1631,7 +1631,7 @@ input[type=text],input[type=number],input[type=date],select{
 <div id="toast"></div>
 <script>
 'use strict';
-const VERSION = '2026.08.28-21';   /* subí esto en cada cambio publicado */
+const VERSION = '2026.08.28-22';   /* subí esto en cada cambio publicado */
 /* ===================================================================
    Diario · Presupuesto — PWA local-first
    Los datos viven en IndexedDB en este dispositivo. Nada sale de acá
@@ -2905,7 +2905,11 @@ function preCuadro(p){
 }
 const preCuotasPagas = p => FLU.filter(f=>f.actId===p.actId && f.tipo==='cuota' && !f.borrado).length;
 const preVivos = () => PRE.filter(p=>!p.borrado);
-const actDeBolsa = nb => ACT.find(a=>a.bolsa===nb || a.n===nb) || null;
+const actDeBolsa = nb => ACT.find(a=>a.bolsa===nb || a.n===nb)
+  /* Compatibilidad con la base histórica: AhorroBTC y el activo Bitcoin
+     nacieron separados. La valoración no debe depender de que el vínculo ya
+     haya alcanzado a sincronizarse en este dispositivo. */
+  || (nb==='AhorroBTC' ? ACT.find(a=>a.mercado==='BTC') : null) || null;
 
 /* estado corriente: la fila que sigue y el saldo según el cuadro */
 function preEstado(p){
@@ -4961,7 +4965,11 @@ async function fusionar(data, silencio){
       if (!mio){ cur.push(x); await DB.put(store,x); }
       else {
         if (x.borrado && !mio.borrado){ mio.borrado = x.borrado; await DB.put(store,mio); }
-        else if ((x.ts||0) > (mio.ts||0) || (store==='act' && (x.valFecha||'') >= (mio.valFecha||''))){
+        const tsRemoto=x.ts||0, tsLocal=mio.ts||0;
+        const gana = (tsRemoto||tsLocal)
+          ? tsRemoto > tsLocal
+          : store==='act' && (x.valFecha||'') > (mio.valFecha||'');
+        if (gana){
           Object.assign(mio, x); await DB.put(store, mio);
         }
       }
@@ -8791,11 +8799,6 @@ async function boot(){
   /* La base histórica tenía el activo Bitcoin y la bolsa AhorroBTC separados.
      Vincularlos permite que Saldos use las unidades BTC y el precio vigente,
      sin interpretar el antiguo saldo en pesos como cantidad de bitcoins. */
-  const btcAct = ACT.find(a=>a.id==='btc' || a.mercado==='BTC');
-  if (btcAct && !btcAct.bolsa && BOLSA.AhorroBTC){
-    btcAct.bolsa = 'AhorroBTC';
-    await DB.put('act', btcAct);
-  }
   PEN = await DB.all('pen');
   if (!ACT.length && hayDatos()){
     ACT = SA.activos.map(a=>({...a}));
@@ -8804,6 +8807,12 @@ async function boot(){
     for (const a of ACT) await DB.put('act', a);
     for (const x of FLU) await DB.put('flu', x);
     for (const x of VAL) await DB.put('val', x);
+  }
+  const btcAct = ACT.find(a=>a.id==='btc' || a.mercado==='BTC');
+  if (btcAct && !btcAct.bolsa && BOLSA.AhorroBTC){
+    btcAct.bolsa = 'AhorroBTC';
+    btcAct.ts = Date.now();
+    await DB.put('act', btcAct);
   }
   (await DB.all('pto')).forEach(p=>{ PTO[p.k]=p.v; PTO_TS[p.k]=p.ts||0; });
   OBJ = await DB.all('obj');
@@ -8898,7 +8907,7 @@ async function boot(){
     navigator.serviceWorker.addEventListener('controllerchange', () => {
       if (!refreshing) { refreshing = true; window.location.reload(); }
     });
-    navigator.serviceWorker.register('sw.js?v=50').then(reg=>{
+    navigator.serviceWorker.register('sw.js?v=51').then(reg=>{
       reg.addEventListener('updatefound', ()=>{
         const nuevo = reg.installing;
         if (!nuevo) return;
