@@ -1163,8 +1163,9 @@ input[type=text],input[type=number],input[type=date],select{
 
   <div class="card">
     <h3>Monedas</h3>
-    <p class="note" style="margin-bottom:12px">Tres bolsas no están en pesos:
-      <b>AhorroEUR</b> y <b>AhorroEUR_$</b> en euros, <b>AhorroUS</b> en dólares.
+    <p class="note" style="margin-bottom:12px">Las bolsas de divisas y cripto se
+      valoran con su tasa vigente: <b>AhorroEUR</b> y <b>AhorroEUR_$</b> en euros,
+      <b>AhorroUS</b> en dólares y <b>AhorroBTC</b> según la posición BTC registrada.
       Al registrar en ellas el teclado cambia de símbolo y convierte solo.
       Cada movimiento guarda su monto original y la tasa usada, así que cambiar
       la TRM no reescribe la historia.</p>
@@ -1176,12 +1177,16 @@ input[type=text],input[type=number],input[type=date],select{
       <label>TRM dólar (pesos por US$)</label>
       <input type="number" id="cfTrmUSD" min="1" step="0.01">
     </div>
+    <div class="f" style="margin:10px 0 6px">
+      <label>Bitcoin (pesos por BTC)</label>
+      <input type="number" id="cfTrmBTC" min="1" step="0.01">
+    </div>
     <p class="note" id="cfMonAvisos"></p>
     <div class="hr"></div>
     <button class="primary gray" id="btnTasas2">Actualizar tasas ahora</button>
     <p class="note" style="margin-top:10px">Fuentes públicas, sin llave, de solo lectura:
       TRM oficial de la Superfinanciera (datos.gov.co), euro del Banco Central Europeo
-      y bitcoin de Coinbase. El BCE no publica peso colombiano, así que el euro se
+      y bitcoin de Coinbase, con CoinGecko como respaldo. El BCE no publica peso colombiano, así que el euro se
       calcula cruzado por la TRM. Si una fuente no responde se conserva el último
       valor y se avisa. Se consulta solo al abrir la app, una vez al día.</p>
   </div>
@@ -1626,7 +1631,7 @@ input[type=text],input[type=number],input[type=date],select{
 <div id="toast"></div>
 <script>
 'use strict';
-const VERSION = '2026.08.25-19';   /* subí esto en cada cambio publicado */
+const VERSION = '2026.08.28-20';   /* subí esto en cada cambio publicado */
 /* ===================================================================
    Diario · Presupuesto — PWA local-first
    Los datos viven en IndexedDB en este dispositivo. Nada sale de acá
@@ -1766,7 +1771,7 @@ const CFG_DEF = {
   tarea:'Registrar movimiento',
   url:'', neto:0, baseHasta:'2026-07', nombre:'', ocio:'Weekend,Recreación',
   monedas:0, monedasF:'', monedasRef:0,
-  trmEUR:0, trmUSD:0, hurdle:0.168, odClient:'',
+  trmEUR:0, trmUSD:0, trmBTC:0, hurdle:0.168, odClient:'',
   nomina: DEFAULT_NOMINA,
   facturasServicios: { updatedAt: null, facturas: [] }
 };
@@ -1780,10 +1785,11 @@ const CFG_DEF = {
    La semilla queda como respaldo durante el arranque y para bases antiguas. */
 const monedaDe = b => (BOLSA[b] && BOLSA[b].moneda)
   || (S && S.monedaBolsa[b]) || 'COP';
-const simbolo  = c => (S && S.simb[c]) || '$';
+const simbolo  = c => c==='BTC' ? '₿' : (S && S.simb[c]) || '$';
 function trmDe(c){
   if (c==='EUR') return CFG.trmEUR || (S?S.trm.EUR:0);
   if (c==='USD') return CFG.trmUSD || (S?S.trm.USD:0);
+  if (c==='BTC') return CFG.trmBTC || btcCOP() || 0;
   return 1;
 }
 function montoEn(cur, n){
@@ -4318,6 +4324,7 @@ function renderCfg(){
   $('#cfTarea').value=CFG.tarea;
   $('#cfUrl').value = CFG.url || redirectUri();
   $('#cfTrmEUR').value=CFG.trmEUR; $('#cfTrmUSD').value=CFG.trmUSD;
+  $('#cfTrmBTC').value=CFG.trmBTC || btcCOP() || 0;
   const fx = MOV.filter(m=>vivo(m) && m.moneda && m.moneda!=='COP');
   const porCur = {};
   fx.forEach(m=>{ porCur[m.moneda]=(porCur[m.moneda]||0)+m.valorOrig; });
@@ -5364,7 +5371,8 @@ async function pedirPersistencia(){
    EUR/COP = (EUR/USD) x TRM. Igual el bitcoin: BTC/COP = (BTC/USD) x TRM.
    Si una fuente falla, se conserva el último valor guardado y se avisa.
    ================================================================= */
-const T_DEF = {usd:null, eurusd:null, btcusd:null, ts:null, err:''};
+const T_DEF = {usd:null, eurusd:null, btcusd:null, btccop:null,
+  btcFuente:null, ts:null, err:''};
 let TASAS = {...T_DEF};
 
 const fetchJSON = async (url, ms=8000) => {
@@ -5387,10 +5395,21 @@ async function traerEURUSD(){
   return {v:d.rates.USD, fecha:d.date};
 }
 async function traerBTC(){
-  const d = await fetchJSON(SA.tasas.btcusd.url);
-  const a = d && d.data && d.data.amount;
-  if (!a) throw new Error('sin datos');
-  return {v:parseFloat(a), fecha:todayISO()};
+  try {
+    const d = await fetchJSON(SA.tasas.btcusd.url);
+    const a = d && d.data && d.data.amount;
+    if (!a) throw new Error('sin datos');
+    return {v:parseFloat(a), cop:null, fecha:dtLocal(new Date()).slice(0,10),
+      fuente:'Coinbase'};
+  } catch(e){
+    /* Respaldo público y sin llave. Pedir COP directo evita que una caída de
+       Coinbase deje congelada la valoración completa de AhorroBTC. */
+    const d = await fetchJSON('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd,cop');
+    const p = d && d.bitcoin;
+    if (!p || !p.usd || !p.cop) throw new Error('sin datos');
+    return {v:+p.usd, cop:+p.cop, fecha:dtLocal(new Date()).slice(0,10),
+      fuente:'CoinGecko'};
+  }
 }
 
 async function actualizarTasas(silencio){
@@ -5400,7 +5419,10 @@ async function actualizarTasas(silencio){
   else fallos.push('TRM');
   if (e.status==='fulfilled'){ TASAS.eurusd=e.value.v; TASAS.eurusdFecha=e.value.fecha; }
   else fallos.push('euro');
-  if (b.status==='fulfilled'){ TASAS.btcusd=b.value.v; TASAS.btcFecha=b.value.fecha; }
+  if (b.status==='fulfilled'){
+    TASAS.btcusd=b.value.v; TASAS.btccop=b.value.cop||null;
+    TASAS.btcFecha=b.value.fecha; TASAS.btcFuente=b.value.fuente;
+  }
   else fallos.push('bitcoin');
   TASAS.ts = Date.now();
   TASAS.err = fallos.length ? 'No respondieron: '+fallos.join(', ') : '';
@@ -5410,6 +5432,7 @@ async function actualizarTasas(silencio){
     await setCfg('trmUSD', TASAS.usd);
     if (TASAS.eurusd) await setCfg('trmEUR', +(TASAS.eurusd*TASAS.usd).toFixed(2));
   }
+  if (btcMercadoCOP()) await setCfg('trmBTC', +btcMercadoCOP().toFixed(2));
   if (!silencio){
     toast(fallos.length ? 'Parcial · '+TASAS.err : 'Tasas actualizadas', fallos.length>0);
   }
@@ -5417,7 +5440,9 @@ async function actualizarTasas(silencio){
 }
 
 const trmVigente = () => TASAS.usd || CFG.trmUSD || (S?S.trm.USD:0);
-const btcCOP = () => (TASAS.btcusd && trmVigente()) ? TASAS.btcusd*trmVigente() : null;
+const btcMercadoCOP = () => TASAS.btccop
+  || ((TASAS.btcusd && trmVigente()) ? TASAS.btcusd*trmVigente() : null);
+const btcCOP = () => CFG.trmBTC || btcMercadoCOP() || null;
 
 /* valoración derivada: activos con unidades y mercado se valoran en vivo */
 function valMercado(a){
@@ -5435,14 +5460,17 @@ function valMercado(a){
 
 function fmtTasas(){
   if (!TASAS.ts) return 'Sin actualizar. Se usan las tasas de la semilla: '
-    +'US$ '+money(S.trm.USD)+' · € '+money(S.trm.EUR)+'.';
+    +'US$ '+money(S.trm.USD)+' · € '+money(S.trm.EUR)
+    +' · BTC '+money(CFG.trmBTC||0)+'.';
   const dias = Math.round((Date.now()-TASAS.ts)/864e5);
   let t = '<b>TRM oficial</b> '+money(TASAS.usd||0)
     +(TASAS.usdFecha?' <span style="color:var(--tx3)">('+TASAS.usdFecha+')</span>':'')+'<br>'
     +'<b>Euro</b> '+money((TASAS.eurusd||0)*(TASAS.usd||0))
     +' <span style="color:var(--tx3)">= '+(TASAS.eurusd||0).toFixed(4)+' USD x TRM</span><br>'
     +'<b>Bitcoin</b> '+money(btcCOP()||0)
-    +' <span style="color:var(--tx3)">= US$'+nf.format(Math.round(TASAS.btcusd||0))+' x TRM</span><br>'
+    +' <span style="color:var(--tx3)">= US$'+nf.format(Math.round(TASAS.btcusd||0))
+    +(TASAS.btccop?' directo en COP':' x TRM')
+    +(TASAS.btcFuente?' · '+TASAS.btcFuente:'')+'</span><br>'
     +'<span style="color:var(--tx3)">Consultado hace '+(dias===0?'menos de un día':dias+' días')+'.</span>';
   if (TASAS.err) t += '<br><span style="color:var(--warn)">'+TASAS.err+'</span>';
   return t;
@@ -6320,7 +6348,15 @@ const saldoDe = (nb, hasta) => {
   if (hs.length) return saldoPropio(nb, hasta) + hs.reduce((s,h) => s + saldoPropio(h.b, hasta), 0);
   return saldoPropio(nb, hasta);
 };
+const valorMercadoDeBolsa = nb => {
+  const a = actDeBolsa(nb);
+  if (!a || a.mercado!=='BTC') return null;
+  const v = valMercado(a);
+  return v && Number.isFinite(v.valor) ? v : null;
+};
 const enPesos = (nb, s) => {
+  const mercado = valorMercadoDeBolsa(nb);
+  if (mercado) return mercado.valor;
   const c = BOLSA[nb] ? BOLSA[nb].moneda : 'COP';
   return c === 'COP' ? s : s * trmDe(c);
 };
@@ -6367,20 +6403,24 @@ function renderLiquidezPanel(disp, aho, pre, act, deu, patrimonio){
 function renderBolsasJerarquia(filas, tot){
   const fila = (x, sub) => {
     const cur = x.moneda!=='COP';
-    const sm = semaforo(x.b);
-    const est = sm.st==='ok' ? 'ok' : (sm.st==='warn'||sm.st==='bad') ? 'mal' : '';
+    const mercado = valorMercadoDeBolsa(x.b);
+    const sm = mercado ? {st:'mercado'} : semaforo(x.b);
+    const est = (sm.st==='ok'||sm.st==='mercado') ? 'ok'
+      : (sm.st==='warn'||sm.st==='bad') ? 'mal' : '';
     const hs = sub ? [] : hijos(x.b);
     const abierta = renderSaldos.abierta===x.b;
     return `<div class="sl-r ${est}${sub?' sub':''}" data-b="${x.b}">
         <div class="sl-n">${nomB(x.b)}
           ${x.nota?`<em>${x.nota}</em>`:''}
           ${hs.length?`<em>${hs.length} bolsillos · tocá para ${abierta?'cerrar':'ver'}</em>`:''}
-          ${cur?`<em>${montoEn(x.moneda,x.s)} · TRM ${money(trmDe(x.moneda))}</em>`:''}
-          <em>${sm.st==='gris' ? 'sin verificar'
+          ${mercado?`<em>${actDeBolsa(x.b).unidades} BTC · 1 BTC = ${money(btcCOP())}</em>`
+            :cur?`<em>${montoEn(x.moneda,x.s)} · TRM ${money(trmDe(x.moneda))}</em>`:''}
+          <em>${sm.st==='mercado' ? 'valor de mercado · '+mercado.fecha
+            : sm.st==='gris' ? 'sin verificar'
             : sm.st==='ok' ? 'cuadra · '+(x.verF||(sm.ver&&sm.ver.fecha)||'')
             : sm.et+' · '+money(sm.dif)}</em></div>
         <div class="sl-v mono">${money(x.cop)}</div>
-        <button type="button" class="chipbtn bsa-conc-btn" data-conc="${x.b}" style="font-size:11px;padding:2px 8px;margin-left:6px">Conciliar</button>
+        ${mercado?'':`<button type="button" class="chipbtn bsa-conc-btn" data-conc="${x.b}" style="font-size:11px;padding:2px 8px;margin-left:6px">Conciliar</button>`}
       </div>`
       + (hs.length && abierta ? (()=>{
           const madreS = saldoPropio(x.b);
@@ -8431,7 +8471,7 @@ $('#cfLifeup').onclick = async () => {
   toast(CFG.lifeup ? 'LifeUp activado' : 'LifeUp desactivado');
 };
 [['cfCoin','coin'],['cfTasa','tasa'],['cfExp','exp'],
- ['cfTrmEUR','trmEUR'],['cfTrmUSD','trmUSD']].forEach(([id,k])=>
+ ['cfTrmEUR','trmEUR'],['cfTrmUSD','trmUSD'],['cfTrmBTC','trmBTC']].forEach(([id,k])=>
   $('#'+id).onchange = async e => { await setCfg(k, +e.target.value||0); render(); });
 [['cfSkills','skills'],['cfTarea','tarea'],['cfUrl','url'],['cfNombre','nombre'],['cfOcio','ocio']].forEach(([id,k])=>
   $('#'+id).onchange = e => setCfg(k, e.target.value.trim()));
@@ -8747,6 +8787,14 @@ async function boot(){
   if (hayDatos() && MOV.some(m=>!m.borrado && m.r==='Rendimientos')) await rubroRend();
   /* activos: la semilla se carga una vez; después manda lo que hay en la base */
   ACT = await DB.all('act'); FLU = await DB.all('flu'); VAL = await DB.all('val');
+  /* La base histórica tenía el activo Bitcoin y la bolsa AhorroBTC separados.
+     Vincularlos permite que Saldos use las unidades BTC y el precio vigente,
+     sin interpretar el antiguo saldo en pesos como cantidad de bitcoins. */
+  const btcAct = ACT.find(a=>a.id==='btc' || a.mercado==='BTC');
+  if (btcAct && !btcAct.bolsa && BOLSA.AhorroBTC){
+    btcAct.bolsa = 'AhorroBTC';
+    await DB.put('act', btcAct);
+  }
   PEN = await DB.all('pen');
   if (!ACT.length && hayDatos()){
     ACT = SA.activos.map(a=>({...a}));
@@ -8849,7 +8897,7 @@ async function boot(){
     navigator.serviceWorker.addEventListener('controllerchange', () => {
       if (!refreshing) { refreshing = true; window.location.reload(); }
     });
-    navigator.serviceWorker.register('sw.js?v=48').then(reg=>{
+    navigator.serviceWorker.register('sw.js?v=49').then(reg=>{
       reg.addEventListener('updatefound', ()=>{
         const nuevo = reg.installing;
         if (!nuevo) return;
