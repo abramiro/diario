@@ -1631,7 +1631,7 @@ input[type=text],input[type=number],input[type=date],select{
 <div id="toast"></div>
 <script>
 'use strict';
-const VERSION = '2026.08.28-20';   /* subí esto en cada cambio publicado */
+const VERSION = '2026.08.28-21';   /* subí esto en cada cambio publicado */
 /* ===================================================================
    Diario · Presupuesto — PWA local-first
    Los datos viven en IndexedDB en este dispositivo. Nada sale de acá
@@ -5402,12 +5402,13 @@ async function traerBTC(){
     return {v:parseFloat(a), cop:null, fecha:dtLocal(new Date()).slice(0,10),
       fuente:'Coinbase'};
   } catch(e){
-    /* Respaldo público y sin llave. Pedir COP directo evita que una caída de
-       Coinbase deje congelada la valoración completa de AhorroBTC. */
-    const d = await fetchJSON('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd,cop');
+    /* Respaldo público y sin llave. CoinGecko entrega BTC/USD y se cruza con
+       la misma TRM oficial usada por Coinbase; COP no está disponible en
+       todas las respuestas del endpoint público. */
+    const d = await fetchJSON('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd');
     const p = d && d.bitcoin;
-    if (!p || !p.usd || !p.cop) throw new Error('sin datos');
-    return {v:+p.usd, cop:+p.cop, fecha:dtLocal(new Date()).slice(0,10),
+    if (!p || !p.usd) throw new Error('sin datos');
+    return {v:+p.usd, cop:null, fecha:dtLocal(new Date()).slice(0,10),
       fuente:'CoinGecko'};
   }
 }
@@ -8897,7 +8898,7 @@ async function boot(){
     navigator.serviceWorker.addEventListener('controllerchange', () => {
       if (!refreshing) { refreshing = true; window.location.reload(); }
     });
-    navigator.serviceWorker.register('sw.js?v=49').then(reg=>{
+    navigator.serviceWorker.register('sw.js?v=50').then(reg=>{
       reg.addEventListener('updatefound', ()=>{
         const nuevo = reg.installing;
         if (!nuevo) return;
