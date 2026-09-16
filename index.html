@@ -6894,9 +6894,22 @@ function renderHist(){
   const S2 = filtrar();
   const vals = S2.map(m=>m.v);
   const tot = vals.reduce((s,x)=>s+x,0);
-  $('#hTotalL').textContent = {gasto:'Total gastado', ingreso:'Total ingresado',
-    traslado:'Total trasladado', todo:'Suma de todo'}[HFIL.tipo] || 'Total';
-  $('#hTotal').textContent = money(tot);
+  const esTras = m => m.c==='Movimiento' || m.c==='Traslado';
+  const ingresosVis = S2.filter(m=>!esTras(m) && m.i);
+  const gastosVis = S2.filter(m=>!esTras(m) && !m.i);
+  const trasVis = S2.filter(esTras);
+  const ingresos = ingresosVis.reduce((s,m)=>s+m.v,0);
+  const gastos = gastosVis.reduce((s,m)=>s+m.v,0);
+  const trasladado = trasVis.reduce((s,m)=>s+Math.abs(m.v),0);
+  const balance = ingresos-gastos;
+  const indicador = HFIL.tipo==='gasto' ? gastos
+    : HFIL.tipo==='ingreso' ? ingresos
+    : HFIL.tipo==='traslado' ? trasladado : balance;
+  $('#hTotalL').textContent = {gasto:'Gastos del período', ingreso:'Ingresos del período',
+    traslado:'Volumen trasladado', todo:'Balance neto del período'}[HFIL.tipo] || 'Balance del período';
+  $('#hTotal').textContent = money(indicador);
+  $('#hTotal').style.color = HFIL.tipo==='todo'
+    ? (balance>=0?'var(--ok)':'var(--bad)') : '';
   $('#hN').textContent = nf.format(S2.length);
   $('#hPeriodo').textContent = S2.length
     ? `${S2[S2.length-1].f} a ${S2[0].f}` : 'sin movimientos en el filtro';
@@ -6918,25 +6931,46 @@ function renderHist(){
   const mx = Math.max(...vals), mn = Math.min(...vals);
   const may = S2.find(m=>m.v===mx), men = S2.find(m=>m.v===mn);
   const mxM = Math.max(...serie), mnM = Math.min(...serie);
+  const primerMes=S2[S2.length-1].f.slice(0,7), ultimoMes=S2[0].f.slice(0,7);
+  const mesesPeriodo=(+ultimoMes.slice(0,4)-+primerMes.slice(0,4))*12
+    +(+ultimoMes.slice(5,7)-+primerMes.slice(5,7))+1;
+  const tasaAhorro=ingresos>0 ? balance/ingresos*100 : null;
+  const mayorGasto=gastosVis.reduce((a,m)=>!a||m.v>a.v?m:a,null);
+  const mayorIngreso=ingresosVis.reduce((a,m)=>!a||m.v>a.v?m:a,null);
+  const detalle = (m, pref='') => m
+    ? `<div style="font-size:11px;color:var(--tx3)">${pref}${m.r} · ${m.f}</div>` : '';
 
-  $('#hStats').innerHTML = `<table>
-    <tr><td>Promedio por movimiento</td><td class="mono">${money(tot/S2.length)}</td></tr>
-    <tr><td>Mediana por movimiento</td><td class="mono">${money(med(vals))}</td></tr>
-    <tr><td>Mayor</td><td class="mono">${money(mx)}
-      <div style="font-size:11px;color:var(--tx3)">${may.r} · ${may.f}</div></td></tr>
-    <tr><td>Menor</td><td class="mono">${money(mn)}
-      <div style="font-size:11px;color:var(--tx3)">${men.r} · ${men.f}</div></td></tr>
-    <tr><td>Meses con movimiento</td><td class="mono">${nMeses}</td></tr>
-    <tr><td>Frecuencia</td><td class="mono">${(S2.length/nMeses).toFixed(1)} por mes
-      <div style="font-size:11px;color:var(--tx3)">${(()=>{
-        const d = nMeses*30.4/S2.length;
-        return d < 1 ? (1/d).toFixed(1)+' por día'
-             : d < 1.5 ? 'casi todos los días'
-             : 'uno cada '+d.toFixed(d<10?1:0)+' días';
-      })()}</div></td></tr>
-    <tr><td>Promedio mensual</td><td class="mono">${money(tot/nMeses)}</td></tr>
-    <tr class="tot"><td>Mes más alto / más bajo</td><td class="mono">${money(mxM)} / ${money(mnM)}</td></tr>
-  </table>`;
+  if (HFIL.tipo==='todo'){
+    $('#hStats').innerHTML = `<table>
+      <tr><td>Ingresos</td><td class="mono" style="color:var(--ok)">${money(ingresos)}</td></tr>
+      <tr><td>Gastos</td><td class="mono" style="color:var(--bad)">${money(gastos)}</td></tr>
+      <tr class="tot"><td><b>Balance neto</b></td><td class="mono" style="color:${balance>=0?'var(--ok)':'var(--bad)'}"><b>${money(balance)}</b></td></tr>
+      <tr><td>Tasa de ahorro</td><td class="mono">${tasaAhorro==null?'—':tasaAhorro.toFixed(1)+'%'}</td></tr>
+      <tr><td>Gasto promedio mensual</td><td class="mono">${money(gastos/mesesPeriodo)}</td></tr>
+      <tr><td>Mayor gasto</td><td class="mono">${mayorGasto?money(mayorGasto.v):'—'}${detalle(mayorGasto)}</td></tr>
+      <tr><td>Mayor ingreso</td><td class="mono">${mayorIngreso?money(mayorIngreso.v):'—'}${detalle(mayorIngreso)}</td></tr>
+      <tr><td>Traslados internos</td><td class="mono">${money(trasladado)}
+        <div style="font-size:11px;color:var(--tx3)">${nf.format(trasVis.length)} movimientos · no afectan el balance</div></td></tr>
+    </table>`;
+  } else if (HFIL.tipo==='traslado'){
+    $('#hStats').innerHTML = `<table>
+      <tr><td>Traslados realizados</td><td class="mono">${nf.format(trasVis.length)}</td></tr>
+      <tr><td>Promedio por traslado</td><td class="mono">${money(trasladado/Math.max(1,trasVis.length))}</td></tr>
+      <tr><td>Mayor traslado</td><td class="mono">${money(mx)}${detalle(may)}</td></tr>
+      <tr><td>Promedio mensual</td><td class="mono">${money(trasladado/mesesPeriodo)}</td></tr>
+    </table>`;
+  } else {
+    const esIngreso=HFIL.tipo==='ingreso';
+    const totalTipo=esIngreso?ingresos:gastos;
+    const mayorTipo=esIngreso?mayorIngreso:mayorGasto;
+    $('#hStats').innerHTML = `<table>
+      <tr><td>Promedio por movimiento</td><td class="mono">${money(totalTipo/S2.length)}</td></tr>
+      <tr><td>Promedio mensual</td><td class="mono">${money(totalTipo/mesesPeriodo)}</td></tr>
+      <tr><td>Mayor movimiento</td><td class="mono">${mayorTipo?money(mayorTipo.v):'—'}${detalle(mayorTipo)}</td></tr>
+      <tr><td>Meses del período</td><td class="mono">${mesesPeriodo}</td></tr>
+      <tr><td>Frecuencia</td><td class="mono">${(S2.length/mesesPeriodo).toFixed(1)} por mes</td></tr>
+    </table>`;
+  }
 
   /* --- barras --- */
   const ult = meses.slice(-24);
