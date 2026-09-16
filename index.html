@@ -1439,7 +1439,7 @@ input[type=text],input[type=number],input[type=date],select{
      calc(14px + env(safe-area-inset-bottom));overflow:auto">
   <div class="f" style="margin-bottom:18px">
     <button class="chipbtn" id="movCancel">Cancelar</button>
-    <div style="flex:1;text-align:center;font-weight:600;font-size:14px">Mover plata</div>
+    <div id="movTit" style="flex:1;text-align:center;font-weight:600;font-size:14px">Mover plata</div>
     <span style="width:66px"></span>
   </div>
   <div style="flex:1">
@@ -1453,6 +1453,12 @@ input[type=text],input[type=number],input[type=date],select{
     <input type="number" id="movV" step="any" inputmode="decimal"
       style="max-width:100%;width:100%;font-size:22px;text-align:right;margin-bottom:4px">
     <p class="note" id="movConv" style="margin-bottom:14px"></p>
+    <div id="movFxBox" style="display:none;margin-bottom:14px">
+      <div class="lbl" id="movFxLbl" style="margin-bottom:5px">TRM efectiva</div>
+      <input type="number" id="movFx" step="any" inputmode="decimal"
+        style="max-width:100%;width:100%;font-size:18px;text-align:right;margin-bottom:4px">
+      <p class="note" id="movFxHelp">Usá la tasa realmente negociada.</p>
+    </div>
     <div class="lbl" style="margin-bottom:5px">Cuándo</div>
     <input type="datetime-local" id="movDT" style="max-width:100%;width:100%;margin-bottom:14px">
     <div class="lbl" style="margin-bottom:5px">Observación (opcional)</div>
@@ -3516,6 +3522,13 @@ async function prEditarCuota(pId, kNum){
 async function editarMov(mInput){
   let m = typeof mInput === 'string' ? MOV.find(x => x.id === mInput && vivo(x)) : mInput;
   if (!m){ toast('No se encontró el movimiento', true); return; }
+
+  /* Los traslados, especialmente los multimoneda, necesitan editar por
+     separado lo que sale, lo que entra y la tasa efectiva. */
+  if (m.tipo === 'traslado'){
+    abrirMov(m);
+    return;
+  }
 
   if (m.ref && m.ref.startsWith('cuo|')){
     const parts = m.ref.split('|');
@@ -6615,7 +6628,8 @@ async function nuevoBolsillo(){
    al exportar se descompone de vuelta en el par, para que el formato
    Diario cierre igual que siempre.
    ================================================================= */
-function abrirMov(){
+let MOV_EDIT_ID = null;
+function abrirMov(mEdit){
   armarBolsas();
   /* también las cuentas madre: su saldo propio es plata real (lo que
      consignaste al broker y aún no está invertido, por ejemplo) */
@@ -6627,22 +6641,65 @@ function abrirMov(){
     return `<option value="${b.b}">${et}</option>`;
   }).join('');
   $('#movDe').innerHTML = opts; $('#movA').innerHTML = opts;
-  $('#movDe').value = 'Caja';
-  $('#movV').value=''; $('#movObs').value=''; $('#movDT').value=dtLocal(new Date());
-  movPinta();
+  MOV_EDIT_ID = mEdit && mEdit.tipo==='traslado' ? mEdit.id : null;
+  $('#movTit').textContent = MOV_EDIT_ID ? 'Editar traslado' : 'Mover plata';
+  $('#movOk').textContent = MOV_EDIT_ID ? 'Guardar cambios' : 'Mover';
+  $('#movDe').value = MOV_EDIT_ID ? mEdit.de : 'Caja';
+  $('#movA').value = MOV_EDIT_ID ? mEdit.a : ($('#movA').value || 'Caja');
+  $('#movV').value = MOV_EDIT_ID ? (mEdit.deOrig!=null ? mEdit.deOrig : mEdit.valor) : '';
+  $('#movObs').value = MOV_EDIT_ID ? (mEdit.obs||'') : '';
+  $('#movDT').value = MOV_EDIT_ID
+    ? (mEdit.dt || (mEdit.fecha+'T'+(mEdit.hora||'12:00'))).slice(0,16)
+    : dtLocal(new Date());
+  $('#movFx').value = '';
+  if (MOV_EDIT_ID){
+    const cDe=monedaDe(mEdit.de), cA=monedaDe(mEdit.a);
+    if (cDe!==cA){
+      let tasa = mEdit.tasaEfectiva;
+      if (!(tasa>0) && mEdit.deOrig>0 && mEdit.aOrig>0){
+        tasa = cDe==='COP' ? mEdit.deOrig/mEdit.aOrig
+             : cA==='COP' ? mEdit.aOrig/mEdit.deOrig
+             : mEdit.aOrig/mEdit.deOrig;
+      }
+      if (tasa>0) $('#movFx').value = Math.round(tasa*1000000)/1000000;
+    }
+  }
+  movPinta(!MOV_EDIT_ID);
   $('#mov').style.display='flex';
 }
-function movPinta(){
+function movPinta(reiniciarTasa=false){
   const de=$('#movDe').value, a=$('#movA').value;
   const cDe=monedaDe(de), cA=monedaDe(a);
   $('#movDeS').textContent = 'tiene '+montoEn(cDe, saldoPropio(de));
   $('#movAS').textContent  = 'tiene '+montoEn(cA, saldoPropio(a));
   $('#movCur').textContent = cDe!=='COP' ? '(en '+cDe+')' : '';
   const v=+$('#movV').value||0;
-  $('#movConv').textContent = (cDe!==cA && v)
-    ? montoEn(cDe,v)+' → '+montoEn(cA, v*trmDe(cDe)/trmDe(cA))
-      +'  ·  vía TRM del día'
-    : '';
+  const fxBox=$('#movFxBox'), fx=$('#movFx');
+  if (cDe!==cA){
+    const par=cDe+'>'+cA;
+    const unaEsCOP=(cDe==='COP') !== (cA==='COP');
+    const extranjera=cDe==='COP'?cA:cDe;
+    const sugerida=unaEsCOP ? trmDe(extranjera) : trmDe(cDe)/trmDe(cA);
+    if (reiniciarTasa || fx.dataset.par!==par || !(+fx.value>0)){
+      fx.value=Math.round(sugerida*1000000)/1000000;
+      fx.dataset.par=par;
+    }
+    fxBox.style.display='block';
+    $('#movFxLbl').textContent = unaEsCOP
+      ? 'TRM efectiva (COP por '+extranjera+')'
+      : 'Tasa efectiva (1 '+cDe+' en '+cA+')';
+    $('#movFxHelp').textContent = 'Podés reemplazar la sugerida por la tasa realmente negociada.';
+    const tasa=+fx.value||sugerida;
+    const destino=unaEsCOP
+      ? (cDe==='COP' ? v/tasa : v*tasa)
+      : v*tasa;
+    $('#movConv').textContent = v
+      ? montoEn(cDe,v)+' → '+montoEn(cA,destino)+'  ·  tasa efectiva'
+      : '';
+  } else {
+    fxBox.style.display='none';
+    $('#movConv').textContent='';
+  }
 }
 async function guardarMov(){
   const de=$('#movDe').value, a=$('#movA').value;
@@ -6650,16 +6707,34 @@ async function guardarMov(){
   if (!v){ toast('Poné un monto', true); return; }
   if (de===a){ toast('Elegí dos bolsas distintas', true); return; }
   const cDe=monedaDe(de), cA=monedaDe(a);
-  const cop = v*trmDe(cDe);
+  let tasa=1, aOrig=v;
+  if (cDe!==cA){
+    tasa=+$('#movFx').value||0;
+    if (!(tasa>0)){ toast('Poné la tasa efectiva', true); return; }
+    const unaEsCOP=(cDe==='COP') !== (cA==='COP');
+    aOrig=unaEsCOP ? (cDe==='COP' ? v/tasa : v*tasa) : v*tasa;
+  }
+  const cop = cDe==='COP' ? v : cA==='COP' ? aOrig : v*trmDe(cDe);
   const dt = $('#movDT').value || dtLocal(new Date());
-  const m = { id:uuid(), fecha:dt.slice(0,10), hora:dt.slice(11,16), dt,
+  const datos = { fecha:dt.slice(0,10), hora:dt.slice(11,16), dt,
     ym: dt.slice(0,7),
     tipo:'traslado', de, a, deOrig:v,
-    aOrig: cA==='COP' ? cop : cop/trmDe(cA),
+    aOrig, deMoneda:cDe, aMoneda:cA,
+    tasaCambio:aOrig/v,
+    tasaEfectiva:cDe===cA ? 1 : ((cDe==='COP') !== (cA==='COP') ? tasa : null),
     valor:cop, obs:$('#movObs').value.trim(), ts:Date.now() };
-  MOV.push(m); await DB.put('mov', m);
+  let m;
+  if (MOV_EDIT_ID){
+    m=MOV.find(x=>x.id===MOV_EDIT_ID && vivo(x));
+    if (!m){ toast('No se encontró el traslado', true); return; }
+    Object.assign(m,datos);
+  } else {
+    m={id:uuid(),...datos}; MOV.push(m);
+  }
+  await DB.put('mov', m);
   $('#mov').style.display='none';
-  toast(montoEn(cDe,v)+' · '+nomB(de)+' → '+nomB(a));
+  const editado=!!MOV_EDIT_ID; MOV_EDIT_ID=null;
+  toast((editado?'Traslado actualizado · ':'')+montoEn(cDe,v)+' → '+montoEn(cA,aOrig));
   render(); autoSave();
 }
 
@@ -6707,7 +6782,7 @@ function exportarCSV(){
    OneDrive no carga con datos que son idénticos en todos lados.
    ================================================================= */
 let HIST = null;
-let HFIL = {rango:'12m', d1:'', d2:'', cat:'', rub:'', bol:'', q:'', tipo:'gasto',
+let HFIL = {rango:'12m', d1:'', d2:'', cat:'', rub:'', bol:'', q:'', tipo:'todo',
             g:'c', ord:'t', asc:false};
 let HLIM = 60;
 
@@ -6746,9 +6821,11 @@ function universo(){
     id:m.id, f:m.fecha, r:m.r, c:(RB[m.r]||{}).cat||'', b:m.bolsa,
     v:m.valor, o:m.obs||'', i:esIngresoRubro(m.r)?1:0,
     m:m.moneda||'COP', vo:m.valorOrig!=null?m.valorOrig:m.valor, src:'app'}));
-  const tras = (HFIL.tipo==='todo'||HFIL.tipo==='traslado') ? MOV.filter(m=>vivo(m) && m.tipo==='traslado').map(m=>({
+  const tras = MOV.filter(m=>vivo(m) && m.tipo==='traslado').map(m=>({
     id:m.id, f:m.fecha, r:'⇄ '+nomB(m.de)+' → '+nomB(m.a), c:'Traslado', b:m.de, de:m.de, a:m.a,
-    v:m.valor, o:m.obs||'', i:0, m:'COP', vo:m.valor, src:'app'})) : [];
+    v:m.valor, o:[m.obs||'', montoEn(monedaDe(m.de),m.deOrig||0)+' → '+montoEn(monedaDe(m.a),m.aOrig||0),
+      m.tasaEfectiva&&monedaDe(m.de)!==monedaDe(m.a)?'tasa '+Number(m.tasaEfectiva).toLocaleString('es-CO',{maximumFractionDigits:6}):''].filter(Boolean).join(' · '),
+    i:0, m:monedaDe(m.de), vo:m.deOrig!=null?m.deOrig:m.valor, src:'app'}));
   return [...(HIST||[]), ...loc, ...tras];
 }
 
@@ -8042,7 +8119,8 @@ function abrirInspectorBD(bolsaInicial){
       btn.onclick = () => {
         const mid = btn.dataset.inspEdit;
         const m = MOV.find(x => x.id === mid);
-        if (m) abrirModalEditorMov(m);
+        if (m && m.tipo==='traslado') editarMov(m);
+        else if (m) abrirModalEditorMov(m);
       };
     });
 
@@ -8582,10 +8660,10 @@ $('#btnNuevoBol').onclick = nuevoBolsillo;
 $('#btnNuevaCta').onclick = nuevaCuenta;
 $('#btnMover').onclick = abrirMov;
 $('#btnMover2').onclick = abrirMov;
-$('#movCancel').onclick = () => { $('#mov').style.display='none'; };
+$('#movCancel').onclick = () => { MOV_EDIT_ID=null; $('#mov').style.display='none'; };
 $('#movOk').onclick = guardarMov;
-$('#movDe').onchange = movPinta; $('#movA').onchange = movPinta;
-$('#movV').oninput = movPinta;
+$('#movDe').onchange = () => movPinta(true); $('#movA').onchange = () => movPinta(true);
+$('#movV').oninput = () => movPinta(false); $('#movFx').oninput = () => movPinta(false);
 $('#btnCSV').onclick = exportarCSV;
 $('#hRango').onclick = e => { const b=e.target.closest('[data-r]'); if(!b) return;
   HFIL.rango=b.dataset.r; HLIM=60; renderHist();
