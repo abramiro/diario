@@ -211,6 +211,20 @@ section.on{display:block;animation:fi .15s ease}
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .hrow .v{font-variant-numeric:tabular-nums;font-weight:600;white-space:nowrap}
 .hrow.ing .v{color:var(--ok)}
+.hrow .v{display:flex;align-items:center;justify-content:flex-end;gap:6px}
+.hdet-overlay{position:fixed;inset:0;z-index:98;background:rgba(0,0,0,.76);
+  display:flex;align-items:center;justify-content:center;padding:16px}
+.hdet-card{width:min(460px,100%);max-height:90vh;overflow:auto}
+.hdet-grid{display:grid;grid-template-columns:112px minmax(0,1fr);gap:8px 12px;
+  margin:14px 0;font-size:13px}
+.hdet-grid dt{color:var(--tx3)}
+.hdet-grid dd{margin:0;text-align:right;overflow-wrap:anywhere}
+.hdet-obs{background:var(--bg3);border:1px solid var(--line);border-radius:10px;
+  padding:11px 12px;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.45}
+@media(max-width:520px){
+  .hrow{align-items:flex-start}.hrow .v{flex-direction:column;align-items:flex-end}
+  .hdet-grid{grid-template-columns:94px minmax(0,1fr)}
+}
 
 
 /* ---- semáforo de conciliación ---- */
@@ -1201,6 +1215,7 @@ input[type=text],input[type=number],input[type=date],select{
     <button class="primary gray" id="btnOdSync" style="margin-bottom:8px">Sincronizar ahora</button>
     <button class="primary gray" id="btnOdReemplazar" style="margin-bottom:8px">Restablecer datos desde OneDrive</button>
     <button class="primary gray" id="btnOdBase" style="margin-bottom:8px">Subir la base a OneDrive</button>
+    <button class="primary gray" id="btnOdBaseBajar" style="margin-bottom:8px">Actualizar base desde OneDrive</button>
     <button class="primary gray" id="btnOdOut" style="margin-bottom:10px">Desconectar</button>
     <details>
       <summary class="note" style="cursor:pointer">Configuración inicial (una sola vez)</summary>
@@ -1637,7 +1652,7 @@ input[type=text],input[type=number],input[type=date],select{
 <div id="toast"></div>
 <script>
 'use strict';
-const VERSION = '2026.09.15-26';   /* incrementar el consecutivo en cada cambio publicado */
+const VERSION = '2026.09.16-27';   /* incrementar el consecutivo en cada cambio publicado */
 /* ===================================================================
    Diario · Presupuesto — PWA local-first
    Los datos viven en IndexedDB en este dispositivo. Nada sale de acá
@@ -6815,6 +6830,44 @@ function rehidratar(){
   return HIST;
 }
 
+/* Los movimientos importados de la hoja histórica son de solo lectura, pero
+   sus datos —en especial las observaciones— deben poder consultarse completos. */
+function abrirDetalleHist(m){
+  if (!m) return;
+  const traslado = m.c==='Movimiento' || m.c==='Traslado';
+  const tipo = traslado ? 'Traslado' : (m.i ? 'Ingreso' : 'Egreso');
+  const original = m.m!=='COP' ? montoEn(m.m, m.vo) : money(m.vo);
+  const filas = [
+    ['Fecha', m.f || '—'], ['Concepto', m.r || '—'], ['Categoría', m.c || '—'],
+    ['Tipo', tipo], ['Bolsa', m.b || '—'], ['Valor original', original],
+    ['Valor en pesos', money(m.v)],
+    ['Origen', m.src==='hist' ? 'Base histórica' : 'Registrado en la aplicación']
+  ];
+  const modal = document.createElement('div');
+  modal.className = 'hdet-overlay';
+  modal.innerHTML = `<div class="card hdet-card" role="dialog" aria-modal="true"
+      aria-label="Detalle del movimiento">
+    <div class="f"><h3 style="flex:1;margin:0">Detalle del movimiento</h3>
+      <button class="chipbtn" data-hdet-close>Cerrar</button></div>
+    <dl class="hdet-grid">${filas.map((_,i)=>`<dt></dt><dd data-hdet-v="${i}"></dd>`).join('')}</dl>
+    <div class="lbl" style="margin-bottom:6px">Observación</div>
+    <div class="hdet-obs" data-hdet-obs></div>
+    ${m.id ? '<button class="primary gray" data-hdet-edit style="margin-top:12px">Editar movimiento</button>' : ''}
+  </div>`;
+  const dts = modal.querySelectorAll('dt');
+  filas.forEach(([k,v],i)=>{
+    dts[i].textContent = k;
+    modal.querySelector(`[data-hdet-v="${i}"]`).textContent = v;
+  });
+  modal.querySelector('[data-hdet-obs]').textContent = m.o || 'Sin observación registrada.';
+  const cerrar = () => modal.remove();
+  modal.querySelector('[data-hdet-close]').onclick = cerrar;
+  modal.onclick = e => { if (e.target===modal) cerrar(); };
+  const edit = modal.querySelector('[data-hdet-edit]');
+  if (edit) edit.onclick = () => { const id=m.id; cerrar(); editarMov(id); };
+  document.body.appendChild(modal);
+}
+
 /* lo registrado en la app se suma al histórico, con la misma forma */
 function universo(){
   const loc = MOV.filter(m=>vivo(m) && m.tipo!=='traslado').map(m=>({
@@ -7049,11 +7102,13 @@ function renderHist(){
 
   /* --- detalle --- */
   const vis = S2.slice(0, HLIM);
-  $('#hLista').innerHTML = vis.map(m=>`<div class="hrow${m.i?' ing':''}">
+  window.__HVIS = vis;
+  $('#hLista').innerHTML = vis.map((m,j)=>`<div class="hrow${m.i?' ing':''}">
       <div class="a"><b>${m.r}</b>
         <span>${m.f} · ${m.b||'—'}${m.m!=='COP'?' · '+montoEn(m.m,m.vo):''}${
           m.o?' · '+m.o:''}${m.src==='app'?' · registrado acá':''}</span></div>
-      <div class="v">${money(m.v)}
+      <div class="v"><span>${money(m.v)}</span>
+        <button class="chipbtn" data-hdet="${j}" style="padding:2px 8px;font-size:11px">Ver</button>
         ${m.id ? `<button class="chipbtn" data-editmov="${m.id}" style="padding:2px 8px;font-size:11px;margin-left:8px">Editar</button>` : ''}
       </div></div>`).join('');
   const abierta = $('#hLista').style.display !== 'none';
@@ -8667,6 +8722,10 @@ $('#btnOdBase').onclick = async () => {
     toast('Base subida. Ya podés bajarla en los otros dispositivos.'); renderOd(); }
   catch(e){ toast(e.message, true); }
 };
+$('#btnOdBaseBajar').onclick = async () => {
+  try { await bajarBase(); render(); toast('Base actualizada desde OneDrive'); }
+  catch(e){ toast(e.message, true); }
+};
 $('#odClient').onchange = e => setCfg('odClient', e.target.value.trim());
 $('#btnPersistir').onclick = pedirPersistencia;
 $('#btnExport').onclick = exportar;
@@ -8730,7 +8789,11 @@ $('#hTipo').onchange = e => { HFIL.tipo=e.target.value; HLIM=60; renderHist(); }
 $('#hD1').onchange = e => { HFIL.d1=e.target.value; HFIL.rango='libre'; HLIM=60; renderHist(); };
 $('#hD2').onchange = e => { HFIL.d2=e.target.value; HFIL.rango='libre'; HLIM=60; renderHist(); };
 $('#hMasFilas').onclick = () => { HLIM+=120; renderHist(); };
-$('#hLista').onclick = e => { const b=e.target.closest('[data-editmov]'); if (b) editarMov(b.dataset.editmov); };
+$('#hLista').onclick = e => {
+  const d=e.target.closest('[data-hdet]');
+  if (d){ abrirDetalleHist((window.__HVIS||[])[+d.dataset.hdet]); return; }
+  const b=e.target.closest('[data-editmov]'); if (b) editarMov(b.dataset.editmov);
+};
 $('#hCSV').onclick = exportarHist;
 $('#hCSVp').onclick = exportarPivot;
 $('#hCSVt').onclick = exportarTodo;
