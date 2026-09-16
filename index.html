@@ -1637,7 +1637,7 @@ input[type=text],input[type=number],input[type=date],select{
 <div id="toast"></div>
 <script>
 'use strict';
-const VERSION = '2026.09.15-25';   /* incrementar el consecutivo en cada cambio publicado */
+const VERSION = '2026.09.15-26';   /* incrementar el consecutivo en cada cambio publicado */
 /* ===================================================================
    Diario · Presupuesto — PWA local-first
    Los datos viven en IndexedDB en este dispositivo. Nada sale de acá
@@ -6895,18 +6895,31 @@ function renderHist(){
   const vals = S2.map(m=>m.v);
   const tot = vals.reduce((s,x)=>s+x,0);
   const esTras = m => m.c==='Movimiento' || m.c==='Traslado';
-  const ingresosVis = S2.filter(m=>!esTras(m) && m.i);
-  const gastosVis = S2.filter(m=>!esTras(m) && !m.i);
+  /* El histórico antiguo registra pagos de tarjetas, saldos de deuda,
+     compras de divisas, préstamos e inversiones como si fueran gastos.
+     Son transformaciones de patrimonio: no miden consumo ni déficit. */
+  const esPatrimonial = m => {
+    if (esTras(m)) return false;
+    const c=sinTilde(m.c||'').toLowerCase();
+    const r=sinTilde(m.r||'').toLowerCase().trim();
+    if (c==='credito' || c==='inversion') return true;
+    if (BOLSA[m.r] && ['Deuda','Prestado'].includes(BOLSA[m.r].tipo)) return true;
+    return /^(saldos?|endeudamiento|rotativo|tarjeta.*|bcredito|ccredito|credito\s*\d*|prestamo.*|creditos personales|compra divisas|compra participacion|ahorro)$/.test(r);
+  };
+  const patrimonioVis = S2.filter(esPatrimonial);
+  const ingresosVis = S2.filter(m=>!esTras(m) && !esPatrimonial(m) && m.i);
+  const gastosVis = S2.filter(m=>!esTras(m) && !esPatrimonial(m) && !m.i);
   const trasVis = S2.filter(esTras);
   const ingresos = ingresosVis.reduce((s,m)=>s+m.v,0);
   const gastos = gastosVis.reduce((s,m)=>s+m.v,0);
   const trasladado = trasVis.reduce((s,m)=>s+Math.abs(m.v),0);
+  const patrimonial = patrimonioVis.reduce((s,m)=>s+Math.abs(m.v),0);
   const balance = ingresos-gastos;
   const indicador = HFIL.tipo==='gasto' ? gastos
     : HFIL.tipo==='ingreso' ? ingresos
     : HFIL.tipo==='traslado' ? trasladado : balance;
-  $('#hTotalL').textContent = {gasto:'Gastos del período', ingreso:'Ingresos del período',
-    traslado:'Volumen trasladado', todo:'Balance neto del período'}[HFIL.tipo] || 'Balance del período';
+  $('#hTotalL').textContent = {gasto:'Gastos corrientes del período', ingreso:'Ingresos corrientes del período',
+    traslado:'Volumen trasladado', todo:'Flujo corriente neto'}[HFIL.tipo] || 'Flujo corriente del período';
   $('#hTotal').textContent = money(indicador);
   $('#hTotal').style.color = HFIL.tipo==='todo'
     ? (balance>=0?'var(--ok)':'var(--bad)') : '';
@@ -6944,13 +6957,15 @@ function renderHist(){
     $('#hStats').innerHTML = `<table>
       <tr><td>Ingresos</td><td class="mono" style="color:var(--ok)">${money(ingresos)}</td></tr>
       <tr><td>Gastos</td><td class="mono" style="color:var(--bad)">${money(gastos)}</td></tr>
-      <tr class="tot"><td><b>Balance neto</b></td><td class="mono" style="color:${balance>=0?'var(--ok)':'var(--bad)'}"><b>${money(balance)}</b></td></tr>
+      <tr class="tot"><td><b>Flujo corriente neto</b></td><td class="mono" style="color:${balance>=0?'var(--ok)':'var(--bad)'}"><b>${money(balance)}</b></td></tr>
       <tr><td>Tasa de ahorro</td><td class="mono">${tasaAhorro==null?'—':tasaAhorro.toFixed(1)+'%'}</td></tr>
       <tr><td>Gasto promedio mensual</td><td class="mono">${money(gastos/mesesPeriodo)}</td></tr>
       <tr><td>Mayor gasto</td><td class="mono">${mayorGasto?money(mayorGasto.v):'—'}${detalle(mayorGasto)}</td></tr>
       <tr><td>Mayor ingreso</td><td class="mono">${mayorIngreso?money(mayorIngreso.v):'—'}${detalle(mayorIngreso)}</td></tr>
       <tr><td>Traslados internos</td><td class="mono">${money(trasladado)}
         <div style="font-size:11px;color:var(--tx3)">${nf.format(trasVis.length)} movimientos · no afectan el balance</div></td></tr>
+      <tr><td>Movimientos patrimoniales</td><td class="mono">${money(patrimonial)}
+        <div style="font-size:11px;color:var(--tx3)">${nf.format(patrimonioVis.length)} registros de deuda, inversión, préstamos, divisas o saldos · informados aparte</div></td></tr>
     </table>`;
   } else if (HFIL.tipo==='traslado'){
     $('#hStats').innerHTML = `<table>
@@ -6969,6 +6984,8 @@ function renderHist(){
       <tr><td>Mayor movimiento</td><td class="mono">${mayorTipo?money(mayorTipo.v):'—'}${detalle(mayorTipo)}</td></tr>
       <tr><td>Meses del período</td><td class="mono">${mesesPeriodo}</td></tr>
       <tr><td>Frecuencia</td><td class="mono">${(S2.length/mesesPeriodo).toFixed(1)} por mes</td></tr>
+      ${patrimonioVis.length?`<tr><td>Movimientos patrimoniales excluidos</td><td class="mono">${money(patrimonial)}
+        <div style="font-size:11px;color:var(--tx3)">${nf.format(patrimonioVis.length)} registros</div></td></tr>`:''}
     </table>`;
   }
 
