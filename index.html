@@ -1652,7 +1652,7 @@ input[type=text],input[type=number],input[type=date],select{
 <div id="toast"></div>
 <script>
 'use strict';
-const VERSION = '2026.09.16-27';   /* incrementar el consecutivo en cada cambio publicado */
+const VERSION = '2026.09.27-28';   /* incrementar el consecutivo en cada cambio publicado */
 /* ===================================================================
    Diario · Presupuesto — PWA local-first
    Los datos viven en IndexedDB en este dispositivo. Nada sale de acá
@@ -6346,14 +6346,26 @@ function deltaLocal(nb, hasta){
   const info = BOLSA[nb] || {tipo:'Electronico'};
   for (const m of MOV){
     if (m.borrado) continue;
+    /* Una autorización pendiente debe seguir visible en el histórico, pero
+       no forma parte del saldo contable hasta que el banco la confirme. */
+    if (m.estado === 'pendiente') continue;
     /* La apertura ya representa la realidad al corte. Incluir movimientos
        retroactivos de ese día o anteriores volvería a contarlos. */
     if (SS && SS.corte && m.fecha <= SS.corte) continue;
     if (hasta && m.fecha > hasta) continue;
 
     if (m.tipo==='traslado'){
-      if (m.de===nb) d -= m.deOrig;
-      if (m.a ===nb) d += m.aOrig;
+      const sale  = Math.abs(Number(m.deOrig != null ? m.deOrig : m.valor) || 0);
+      const entra = Math.abs(Number(m.aOrig  != null ? m.aOrig  : m.valor) || 0);
+      if (info.tipo === 'Deuda'){
+        /* Usar una tarjeta como origen es un avance: aumenta lo adeudado.
+           Transferir hacia la tarjeta es un pago: reduce lo adeudado. */
+        if (m.de===nb) d += sale;
+        if (m.a ===nb) d -= entra;
+      } else {
+        if (m.de===nb) d -= sale;
+        if (m.a ===nb) d += entra;
+      }
       continue;
     }
     const v = m.valorOrig != null ? m.valorOrig : m.valor;
